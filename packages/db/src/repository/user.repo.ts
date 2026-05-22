@@ -22,6 +22,7 @@ export const getById = async (db: dbClient, userId: string) => {
         email: true,
         image: true,
         stripeCustomerId: true,
+        role: true,
       },
       with: {
         apiKeys: {
@@ -101,6 +102,20 @@ export const create = async (
       emailVerified: false,
     })
     .returning();
+
+  return result;
+};
+
+export const updateRole = async (
+  db: dbClient,
+  userId: string,
+  role: "user" | "admin",
+) => {
+  const [result] = await db
+    .update(users)
+    .set({ role })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, role: users.role });
 
   return result;
 };

@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   pgTable,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -27,6 +28,12 @@ export const users = pgTable("user", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  // Instance-level role for the Better Auth admin plugin ("user" | "admin").
+  // "admin" designates an instance superadmin with access to the admin area.
+  role: varchar("role", { length: 32 }).notNull().default("user"),
+  banned: boolean("banned").notNull().default(false),
+  banReason: text("banReason"),
+  banExpires: timestamp("banExpires"),
 }).enableRLS();
 
 export const usersRelations = relations(users, ({ many }) => ({

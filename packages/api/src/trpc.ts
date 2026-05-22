@@ -12,6 +12,8 @@ import { initAuth } from "@kan/auth/server";
 import { createDrizzleClient } from "@kan/db/client";
 import { createLogger } from "@kan/logger";
 
+import { isAdminAreaEnabled, isSuperAdmin } from "./utils/superAdmin";
+
 const log = createLogger("api");
 
 const TRPC_STATUS_MAP: Partial<Record<TRPCError["code"], number>> = {
@@ -44,6 +46,8 @@ export interface User {
   updatedAt: Date;
   image?: string | null | undefined;
   stripeCustomerId?: string | null | undefined;
+  role?: string | null | undefined;
+  banned?: boolean | null | undefined;
 }
 
 const createAuthWithHeaders = (
@@ -228,6 +232,20 @@ const enforceUserIsAdmin = t.middleware(async ({ ctx, next }) => {
   });
 });
 
+const enforceUserIsSuperAdmin = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+
+  if (!isAdminAreaEnabled() || !isSuperAdmin(ctx.user)) {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+
+  return next({
+    ctx: { ...ctx, user: ctx.user },
+  });
+});
+
 export const protectedProcedure = t.procedure
   .use(loggingMiddleware)
   .use(enforceUserIsAuthed);
@@ -241,3 +259,11 @@ export const adminProtectedProcedure = t.procedure
       path: "/admin/protected",
     },
   });
+
+/**
+ * Procedure for the self-hosted instance admin area. Requires an authenticated
+ * instance superadmin (see {@link isSuperAdmin}) and is disabled on cloud.
+ */
+export const superAdminProcedure = t.procedure
+  .use(loggingMiddleware)
+  .use(enforceUserIsSuperAdmin);

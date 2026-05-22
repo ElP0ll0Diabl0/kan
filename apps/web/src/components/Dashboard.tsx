@@ -231,6 +231,7 @@ export default function Dashboard({
                 displayName: user?.name ?? session?.user.name,
                 email: user?.email ?? session?.user.email ?? "",
                 image: user?.image ?? undefined,
+                isAdmin: user?.isAdmin ?? false,
               }}
               isLoading={sessionLoading || userLoading}
               onCloseSideNav={closeSideNav}

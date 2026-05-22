@@ -56,6 +56,24 @@ export function createDatabaseHooks(db: dbClient) {
           return Promise.resolve(true);
         },
         async after(user: BetterAuthUser, _context: unknown) {
+          // Bootstrap instance superadmins: any user whose email is listed in
+          // KAN_SUPERADMIN_EMAILS is promoted to the "admin" role on creation.
+          const superAdminEmails = (process.env.KAN_SUPERADMIN_EMAILS ?? "")
+            .split(",")
+            .map((email) => email.trim().toLowerCase())
+            .filter(Boolean);
+          if (superAdminEmails.includes(user.email.toLowerCase())) {
+            try {
+              await userRepo.updateRole(db, user.id, "admin");
+              log.info({ userId: user.id }, "Promoted user to instance admin");
+            } catch (error) {
+              log.error(
+                { err: error, userId: user.id },
+                "Failed to set superadmin role",
+              );
+            }
+          }
+
           let avatarKey = user.image;
           const storageDomain = process.env.NEXT_PUBLIC_STORAGE_DOMAIN;
           if (

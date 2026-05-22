@@ -239,6 +239,13 @@
       "when": 1778617946519,
       "tag": "20260512203226_AddPartnerLicenseToSubscription",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779453002424,
+      "tag": "20260522123002_AddUserAdminFields",
+      "breakpoints": true
     }
   ]
 }

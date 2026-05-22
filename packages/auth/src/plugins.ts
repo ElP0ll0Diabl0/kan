@@ -1,5 +1,5 @@
 import { stripe } from "@better-auth/stripe";
-import { apiKey, genericOAuth } from "better-auth/plugins";
+import { admin, apiKey, genericOAuth } from "better-auth/plugins";
 import { magicLink } from "better-auth/plugins/magic-link";
 
 import type { dbClient } from "@kan/db/client";
@@ -20,6 +20,9 @@ import { triggerWorkflow } from "./utils";
 export function createPlugins(db: dbClient) {
   return [
     socialProvidersPlugin(),
+    // Instance-level admin roles ("user" | "admin"). Used to gate the
+    // self-hosted admin area; see KAN_SUPERADMIN_EMAILS for bootstrapping.
+    admin({ defaultRole: "user", adminRoles: ["admin"] }),
     ...(process.env.NEXT_PUBLIC_KAN_ENV === "cloud"
       ? [
           stripe({
