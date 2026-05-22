@@ -151,6 +151,9 @@ export function WorkspaceDetail() {
                 {t`Visibility`}
               </th>
               <th className="px-3 py-3 text-left text-sm font-semibold text-light-900 dark:text-dark-900">
+                {t`Access`}
+              </th>
+              <th className="px-3 py-3 text-left text-sm font-semibold text-light-900 dark:text-dark-900">
                 {t`Status`}
               </th>
               <th className="px-3 py-3 text-right text-sm font-semibold text-light-900 dark:text-dark-900">
@@ -162,7 +165,7 @@ export function WorkspaceDetail() {
             {data.boards.length === 0 && (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={5}
                   className="px-4 py-8 text-center text-sm text-light-900 dark:text-dark-900"
                 >
                   {t`No boards`}
@@ -176,6 +179,11 @@ export function WorkspaceDetail() {
                 </td>
                 <td className="px-3 py-3 text-sm capitalize text-light-1000 dark:text-dark-1000">
                   {board.visibility}
+                </td>
+                <td className="px-3 py-3 text-sm text-light-1000 dark:text-dark-1000">
+                  {board.accessLevel === "restricted"
+                    ? t`Restricted`
+                    : t`Workspace`}
                 </td>
                 <td className="px-3 py-3 text-sm text-light-1000 dark:text-dark-1000">
                   {board.isArchived ? t`Archived` : t`Active`}

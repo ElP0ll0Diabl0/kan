@@ -79,6 +79,7 @@ export const getWorkspaceOverview = (
           name: true,
           slug: true,
           visibility: true,
+          accessLevel: true,
           type: true,
           isArchived: true,
           createdAt: true,

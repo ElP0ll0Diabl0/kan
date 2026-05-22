@@ -15,6 +15,7 @@ import {
 import type { dbClient } from "@kan/db/client";
 import type { BoardVisibilityStatus } from "@kan/db/schema";
 import {
+  boardMembers,
   boards,
   cardActivities,
   cardAttachments,
@@ -44,8 +45,32 @@ export const getAllByWorkspaceId = async (
   db: dbClient,
   workspaceId: number,
   userId: string,
-  opts?: { type?: "regular" | "template"; archived?: boolean },
+  opts?: {
+    type?: "regular" | "template";
+    archived?: boolean;
+    isWorkspaceAdmin?: boolean;
+  },
 ) => {
+  // Restricted boards are only visible to their board members; workspace
+  // admins (and "workspace"-access boards) bypass this filter.
+  const accessFilter = opts?.isWorkspaceAdmin
+    ? undefined
+    : or(
+        eq(boards.accessLevel, "workspace"),
+        inArray(
+          boards.id,
+          db
+            .select({ boardId: boardMembers.boardId })
+            .from(boardMembers)
+            .where(
+              and(
+                eq(boardMembers.userId, userId),
+                isNull(boardMembers.deletedAt),
+              ),
+            ),
+        ),
+      );
+
   const boardsData = await db.query.boards.findMany({
     columns: {
       publicId: true,
@@ -78,7 +103,10 @@ export const getAllByWorkspaceId = async (
       eq(boards.workspaceId, workspaceId),
       isNull(boards.deletedAt),
       opts?.type ? eq(boards.type, opts.type) : undefined,
-      opts?.archived !== undefined ? eq(boards.isArchived, opts.archived) : undefined,
+      opts?.archived !== undefined
+        ? eq(boards.isArchived, opts.archived)
+        : undefined,
+      accessFilter,
     ),
   });
 
@@ -109,6 +137,36 @@ export const getIdByPublicId = async (db: dbClient, boardPublicId: string) => {
   });
 
   return board;
+};
+
+/** Minimal board context for board-level access checks. */
+export const getAccessByPublicId = async (
+  db: dbClient,
+  boardPublicId: string,
+) => {
+  return db.query.boards.findFirst({
+    columns: {
+      id: true,
+      workspaceId: true,
+      accessLevel: true,
+      createdBy: true,
+    },
+    where: eq(boards.publicId, boardPublicId),
+  });
+};
+
+export const setAccessLevel = async (
+  db: dbClient,
+  boardPublicId: string,
+  accessLevel: "workspace" | "restricted",
+) => {
+  const [result] = await db
+    .update(boards)
+    .set({ accessLevel, updatedAt: new Date() })
+    .where(eq(boards.publicId, boardPublicId))
+    .returning({ id: boards.id, accessLevel: boards.accessLevel });
+
+  return result;
 };
 
 interface DueDateFilter {

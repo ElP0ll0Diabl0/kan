@@ -37,6 +37,7 @@ import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 import { formatToArray } from "~/utils/helpers";
 import { DeleteCardConfirmation } from "~/views/card/components/DeleteCardConfirmation";
+import { BoardAccessForm } from "./components/BoardAccessForm";
 import BoardDropdown from "./components/BoardDropdown";
 import Card from "./components/Card";
 import { CardContextDueDateModal } from "./components/CardContextDueDateModal";
@@ -457,6 +458,16 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             workspaceSlug={workspace.slug ?? ""}
             boardSlug={boardData?.slug ?? ""}
             queryParams={queryParams}
+          />
+        </Modal>
+
+        <Modal
+          modalSize="sm"
+          isVisible={isOpen && modalContentType === "BOARD_ACCESS"}
+        >
+          <BoardAccessForm
+            boardPublicId={boardId ?? ""}
+            workspacePublicId={workspace.publicId ?? ""}
           />
         </Modal>
 
