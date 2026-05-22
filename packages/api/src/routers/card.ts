@@ -19,6 +19,10 @@ import {
   activityItemSchema,
 } from "../schemas";
 import { mergeActivities } from "../utils/activities";
+import {
+  bulkCreateWithWebhook as bulkCreateCardActivity,
+  createWithWebhook as createCardActivity,
+} from "../utils/cardActivityHook";
 import { sendMentionEmails } from "../utils/notifications";
 import { assertBoardPermission } from "../utils/permissions";
 import { generateAttachmentUrl, generateAvatarUrl } from "@kan/shared/utils";
@@ -131,7 +135,7 @@ export const cardRouter = createTRPCRouter({
           createdBy: userId,
         }));
 
-        await cardActivityRepo.bulkCreate(ctx.db, cardActivitesInsert);
+        await bulkCreateCardActivity(ctx.db, cardActivitesInsert);
       }
 
       if (newCardId && input.memberPublicIds.length) {
@@ -170,7 +174,7 @@ export const cardRouter = createTRPCRouter({
           createdBy: userId,
         }));
 
-        await cardActivityRepo.bulkCreate(ctx.db, cardActivitesInsert);
+        await bulkCreateCardActivity(ctx.db, cardActivitesInsert);
       }
 
       if (input.description) {
@@ -270,7 +274,7 @@ export const cardRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.comment.added" as const,
         cardId: card.id,
         commentId: newComment.id,
@@ -359,7 +363,7 @@ export const cardRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.comment.updated" as const,
         cardId: card.id,
         commentId: updatedComment.id,
@@ -448,7 +452,7 @@ export const cardRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.comment.deleted" as const,
         cardId: card.id,
         commentId: existingComment.id,
@@ -527,7 +531,7 @@ export const cardRouter = createTRPCRouter({
             code: "INTERNAL_SERVER_ERROR",
           });
 
-        await cardActivityRepo.create(ctx.db, {
+        await createCardActivity(ctx.db, {
           type: "card.updated.label.removed" as const,
           cardId: card.id,
           labelId: label.id,
@@ -546,7 +550,7 @@ export const cardRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.label.added" as const,
         cardId: card.id,
         labelId: label.id,
@@ -630,7 +634,7 @@ export const cardRouter = createTRPCRouter({
             code: "INTERNAL_SERVER_ERROR",
           });
 
-        await cardActivityRepo.create(ctx.db, {
+        await createCardActivity(ctx.db, {
           type: "card.updated.member.removed" as const,
           cardId: card.id,
           workspaceMemberId: member.id,
@@ -649,7 +653,7 @@ export const cardRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.member.added" as const,
         cardId: card.id,
         workspaceMemberId: member.id,
@@ -1058,7 +1062,7 @@ export const cardRouter = createTRPCRouter({
       }
 
       if (activities.length > 0) {
-        await cardActivityRepo.bulkCreate(ctx.db, activities);
+        await bulkCreateCardActivity(ctx.db, activities);
       }
 
       // Build changes object for webhook
@@ -1182,7 +1186,7 @@ export const cardRouter = createTRPCRouter({
         deletedBy: userId,
       });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.archived",
         cardId: card.id,
         createdBy: userId,
@@ -1341,7 +1345,7 @@ export const cardRouter = createTRPCRouter({
             labelId: cardLabel.id,
             createdBy: userId,
           }));
-          await cardActivityRepo.bulkCreate(ctx.db, cardActivitesInsert);
+          await bulkCreateCardActivity(ctx.db, cardActivitesInsert);
         }
       }
 
@@ -1366,7 +1370,7 @@ export const cardRouter = createTRPCRouter({
             workspaceMemberId: member.id,
             createdBy: userId,
           }));
-          await cardActivityRepo.bulkCreate(ctx.db, cardActivitesInsert);
+          await bulkCreateCardActivity(ctx.db, cardActivitesInsert);
         }
       }
 
@@ -1388,7 +1392,7 @@ export const cardRouter = createTRPCRouter({
               });
             }
           }
-          await cardActivityRepo.create(ctx.db, {
+          await createCardActivity(ctx.db, {
             type: "card.updated.checklist.added",
             cardId: newCard.id,
             toTitle: newChecklist.name,
