@@ -2,7 +2,7 @@ import { and, count, desc, eq, isNotNull } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 import type { dbClient } from "@kan/db/client";
-import { account, apikey, users } from "@kan/db/schema";
+import { account, apikey, session, users } from "@kan/db/schema";
 
 const PROVIDER_CREDENTIAL = "credential";
 const PROVIDER_MAGIC_LINK = "magic-link";
@@ -118,6 +118,29 @@ export const updateRole = async (
     .returning({ id: users.id, role: users.role });
 
   return result;
+};
+
+export const setBanned = async (
+  db: dbClient,
+  userId: string,
+  args: { banned: boolean; banReason?: string | null; banExpires?: Date | null },
+) => {
+  const [result] = await db
+    .update(users)
+    .set({
+      banned: args.banned,
+      banReason: args.banned ? (args.banReason ?? null) : null,
+      banExpires: args.banned ? (args.banExpires ?? null) : null,
+    })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, banned: users.banned });
+
+  return result;
+};
+
+/** Deletes all of a user's sessions — used to force a ban to take effect. */
+export const clearSessions = async (db: dbClient, userId: string) => {
+  await db.delete(session).where(eq(session.userId, userId));
 };
 
 export const update = async (

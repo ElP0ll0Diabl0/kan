@@ -10,6 +10,8 @@ import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { HiChevronDown } from "react-icons/hi2";
 
+import Popup from "~/components/Popup";
+
 export type AdminTab = "overview" | "workspaces" | "members";
 
 interface AdminLayoutProps {
@@ -104,6 +106,7 @@ export function AdminLayout({ children, currentTab }: AdminLayoutProps) {
           </div>
         </div>
       </div>
+      <Popup />
     </div>
   );
 }
