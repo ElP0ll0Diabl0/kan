@@ -373,11 +373,13 @@ const ActivityList = ({
   isLoading: cardIsLoading,
   isAdmin,
   isViewOnly,
+  filter = "all",
 }: {
   cardPublicId: string;
   isLoading: boolean;
   isAdmin?: boolean;
   isViewOnly?: boolean;
+  filter?: "all" | "comments" | "activity";
 }) => {
   const { dateLocale } = useLocalisation();
   const { data: sessionData } = authClient.useSession();
@@ -489,9 +491,26 @@ const ActivityList = ({
   const isLoading =
     cardIsLoading || (isFetchingFirst && allActivities.length === 0);
 
+  const isCommentActivity = (
+    activity: GetCardActivitiesOutput["activities"][number],
+  ) => activity.type === "card.updated.comment.added";
+
+  const visibleActivities = allActivities.filter((activity) => {
+    if (filter === "comments") return isCommentActivity(activity);
+    if (filter === "activity") return !isCommentActivity(activity);
+    return true;
+  });
+
+  const showEmptyState = !isLoading && !hasMore && visibleActivities.length === 0;
+
   return (
     <div className="flex flex-col space-y-4 pt-4">
-      {allActivities.map((activity, index) => {
+      {showEmptyState && (
+        <p className="text-sm text-light-900 dark:text-dark-800">
+          {filter === "comments" ? t`No comments yet` : t`No activity yet`}
+        </p>
+      )}
+      {visibleActivities.map((activity, index) => {
         const activityText = getActivityText({
           type: activity.type,
           toTitle: activity.toTitle,
@@ -549,7 +568,7 @@ const ActivityList = ({
                 )}
                 isLoading={isLoading}
               />
-              {index !== allActivities.length - 1 && (
+              {index !== visibleActivities.length - 1 && (
                 <div className="absolute bottom-[-14px] left-1/2 top-[30px] w-0.5 -translate-x-1/2 bg-light-600 dark:bg-dark-600" />
               )}
             </div>
@@ -576,7 +595,11 @@ const ActivityList = ({
             disabled={isFetching}
             className="text-sm font-medium text-light-900 hover:text-light-1000 disabled:opacity-50 dark:text-dark-800 dark:hover:text-dark-1000"
           >
-            {isFetching ? t`Loading...` : t`Load more activities`}
+            {isFetching
+              ? t`Loading...`
+              : filter === "comments"
+                ? t`Load more comments`
+                : t`Load more activities`}
           </button>
         </div>
       )}
