@@ -491,26 +491,26 @@ const ActivityList = ({
   const isLoading =
     cardIsLoading || (isFetchingFirst && allActivities.length === 0);
 
-  const isCommentActivity = (
-    activity: GetCardActivitiesOutput["activities"][number],
-  ) => activity.type === "card.updated.comment.added";
+  // The Activity tab excludes comments (they live on the Comments tab).
+  const visibleActivities =
+    filter === "activity"
+      ? allActivities.filter(
+          (activity) => activity.type !== "card.updated.comment.added",
+        )
+      : allActivities;
 
-  const visibleActivities = allActivities.filter((activity) => {
-    if (filter === "comments") return isCommentActivity(activity);
-    if (filter === "activity") return !isCommentActivity(activity);
-    return true;
-  });
-
-  const showEmptyState = !isLoading && !hasMore && visibleActivities.length === 0;
+  const showEmptyState =
+    !isLoading && !hasMore && visibleActivities.length === 0;
 
   return (
-    <div className="flex flex-col space-y-4 pt-4">
-      {showEmptyState && (
-        <p className="text-sm text-light-900 dark:text-dark-800">
-          {filter === "comments" ? t`No comments yet` : t`No activity yet`}
-        </p>
-      )}
-      {visibleActivities.map((activity, index) => {
+    <div className="scrollbar-thumb-rounded-[4px] scrollbar-track-rounded-[4px] max-h-[480px] overflow-y-auto pr-1 scrollbar scrollbar-track-light-200 scrollbar-thumb-light-400 dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-300">
+      <div className="flex flex-col space-y-4 pt-4">
+        {showEmptyState && (
+          <p className="text-sm text-light-900 dark:text-dark-800">
+            {t`No activity yet`}
+          </p>
+        )}
+        {visibleActivities.map((activity, index) => {
         const activityText = getActivityText({
           type: activity.type,
           toTitle: activity.toTitle,
@@ -588,21 +588,18 @@ const ActivityList = ({
           </div>
         );
       })}
-      {hasMore && (
-        <div className="flex justify-center pt-4">
-          <button
-            onClick={handleLoadMore}
-            disabled={isFetching}
-            className="text-sm font-medium text-light-900 hover:text-light-1000 disabled:opacity-50 dark:text-dark-800 dark:hover:text-dark-1000"
-          >
-            {isFetching
-              ? t`Loading...`
-              : filter === "comments"
-                ? t`Load more comments`
-                : t`Load more activities`}
-          </button>
-        </div>
-      )}
+        {hasMore && (
+          <div className="flex justify-center pt-4">
+            <button
+              onClick={handleLoadMore}
+              disabled={isFetching}
+              className="text-sm font-medium text-light-900 hover:text-light-1000 disabled:opacity-50 dark:text-dark-800 dark:hover:text-dark-1000"
+            >
+              {isFetching ? t`Loading...` : t`Load more activities`}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
