@@ -780,6 +780,8 @@ export const cardRouter = createTRPCRouter({
         cardPublicId: z.string().min(12),
         limit: z.number().min(1).max(100).optional().default(10),
         cursor: z.string().datetime().optional(), // ISO datetime string
+        direction: z.enum(["forward", "backward"]).optional().default("forward"),
+        commentsOnly: z.boolean().optional().default(false),
       }),
     )
     .output(
@@ -825,6 +827,8 @@ export const cardRouter = createTRPCRouter({
         {
           limit: input.limit,
           cursor,
+          direction: input.direction,
+          commentsOnly: input.commentsOnly,
         },
       );
 

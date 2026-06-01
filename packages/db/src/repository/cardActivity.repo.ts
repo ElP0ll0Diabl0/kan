@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, or } from "drizzle-orm";
 
 import type { dbClient } from "@kan/db/client";
 import type { ActivityType } from "@kan/db/schema";
@@ -107,10 +107,18 @@ export const getPaginatedActivities = async (
   options?: {
     limit?: number;
     cursor?: Date; // createdAt cursor for pagination
+    // "forward" returns the oldest activities first and paginates towards
+    // newer ones; "backward" returns the newest activities first (as an
+    // ascending page) and paginates towards older ones.
+    direction?: "forward" | "backward";
+    // When true, only comment activities are returned.
+    commentsOnly?: boolean;
   },
 ) => {
   const limit = options?.limit ?? 20;
   const cursor = options?.cursor;
+  const direction = options?.direction ?? "forward";
+  const commentsOnly = options?.commentsOnly ?? false;
 
   const validComments = await db
     .select({ id: comments.id })
@@ -118,6 +126,12 @@ export const getPaginatedActivities = async (
     .where(and(eq(comments.cardId, cardId), isNull(comments.deletedAt)));
 
   const validCommentIds = validComments.map((comment) => comment.id);
+
+  const cursorCondition = cursor
+    ? direction === "backward"
+      ? lt(cardActivities.createdAt, cursor)
+      : gt(cardActivities.createdAt, cursor)
+    : undefined;
 
   const activities = await db.query.cardActivities.findMany({
     columns: {
@@ -135,7 +149,10 @@ export const getPaginatedActivities = async (
     },
     where: and(
       eq(cardActivities.cardId, cardId),
-      cursor ? gt(cardActivities.createdAt, cursor) : undefined,
+      cursorCondition,
+      commentsOnly
+        ? eq(cardActivities.type, "card.updated.comment.added")
+        : undefined,
       or(
         isNull(cardActivities.commentId),
         inArray(cardActivities.commentId, validCommentIds),
@@ -202,13 +219,26 @@ export const getPaginatedActivities = async (
         },
       },
     },
-    orderBy: asc(cardActivities.createdAt), // required for merging and pagination
+    // Backward pagination fetches newest-first, then we reverse the page so
+    // the returned array is always ascending (required for merging).
+    orderBy:
+      direction === "backward"
+        ? desc(cardActivities.createdAt)
+        : asc(cardActivities.createdAt),
     limit: limit + 1, // fetch one extra to check if there are more
   });
 
   const hasMore = activities.length > limit;
-  const items = activities.slice(0, limit);
-  const nextCursor = hasMore ? items[items.length - 1]?.createdAt : undefined;
+  const page = activities.slice(0, limit);
+  const items = direction === "backward" ? page.reverse() : page;
+
+  // For forward pagination the next cursor is the newest item in the page
+  // (fetch newer next); for backward it is the oldest item (fetch older next).
+  const nextCursor = hasMore
+    ? direction === "backward"
+      ? items[0]?.createdAt
+      : items[items.length - 1]?.createdAt
+    : undefined;
 
   return {
     activities: items,

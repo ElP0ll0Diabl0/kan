@@ -29,6 +29,7 @@ import ActivityList from "./components/ActivityList";
 import { AttachmentThumbnails } from "./components/AttachmentThumbnails";
 import { AttachmentUpload } from "./components/AttachmentUpload";
 import Checklists from "./components/Checklists";
+import CommentsList from "./components/CommentsList";
 import { DeleteCardConfirmation } from "./components/DeleteCardConfirmation";
 import { DeleteChecklistConfirmation } from "./components/DeleteChecklistConfirmation";
 import { DeleteCommentConfirmation } from "./components/DeleteCommentConfirmation";
@@ -504,11 +505,9 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
                         </div>
                         {activeTab === "comments" ? (
                           <>
-                            <ActivityList
+                            <CommentsList
                               cardPublicId={cardId}
                               isLoading={!card}
-                              isAdmin={workspace.role === "admin"}
-                              filter="comments"
                             />
                             <div className="mt-6">
                               <NewCommentForm
