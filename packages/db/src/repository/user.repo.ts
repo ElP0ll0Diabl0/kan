@@ -146,7 +146,13 @@ export const clearSessions = async (db: dbClient, userId: string) => {
 export const update = async (
   db: dbClient,
   userId: string,
-  updates: { image?: string; name?: string; stripeCustomerId?: string },
+  updates: {
+    image?: string;
+    name?: string;
+    stripeCustomerId?: string;
+    department?: string | null;
+    title?: string | null;
+  },
 ) => {
   const [result] = await db
     .update(users)
@@ -154,12 +160,16 @@ export const update = async (
       name: updates.name,
       image: updates.image,
       stripeCustomerId: updates.stripeCustomerId,
+      department: updates.department,
+      title: updates.title,
     })
     .where(eq(users.id, userId))
     .returning({
       name: users.name,
       image: users.image,
       stripeCustomerId: users.stripeCustomerId,
+      department: users.department,
+      title: users.title,
     });
 
   return result;

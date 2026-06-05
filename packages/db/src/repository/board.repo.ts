@@ -126,6 +126,47 @@ export const getAllByWorkspaceId = async (
     });
 };
 
+/**
+ * Lists every restricted board in a workspace along with the target user's
+ * board membership (if any). Used by the admin area to manage a user's
+ * board-level scope. Boards with "workspace" access are excluded — every
+ * workspace member already has access there.
+ */
+export const getRestrictedBoardsWithUserMembershipByWorkspaceId = async (
+  db: dbClient,
+  workspaceId: number,
+  targetUserId: string,
+) => {
+  const boardsData = await db.query.boards.findMany({
+    columns: { publicId: true, name: true },
+    where: and(
+      eq(boards.workspaceId, workspaceId),
+      eq(boards.accessLevel, "restricted"),
+      isNull(boards.deletedAt),
+    ),
+    with: {
+      members: {
+        columns: { publicId: true, role: true },
+        where: and(
+          eq(boardMembers.userId, targetUserId),
+          isNull(boardMembers.deletedAt),
+        ),
+      },
+    },
+    orderBy: asc(boards.name),
+  });
+
+  return boardsData.map((board) => {
+    // The (boardId, userId) unique constraint guarantees at most one active row.
+    const member = board.members[0];
+    return {
+      publicId: board.publicId,
+      name: board.name,
+      member: member ? { publicId: member.publicId, role: member.role } : null,
+    };
+  });
+};
+
 export const getIdByPublicId = async (db: dbClient, boardPublicId: string) => {
   const board = await db.query.boards.findFirst({
     columns: {
