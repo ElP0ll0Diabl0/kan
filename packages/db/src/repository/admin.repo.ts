@@ -163,6 +163,8 @@ export const getUserOverview = async (db: dbClient, userId: string) => {
       name: true,
       email: true,
       image: true,
+      department: true,
+      title: true,
       role: true,
       banned: true,
       banReason: true,

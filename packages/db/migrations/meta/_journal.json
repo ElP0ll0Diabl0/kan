@@ -253,6 +253,13 @@
       "when": 1779456246375,
       "tag": "20260522132406_AddBoardAccessControl",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780650858042,
+      "tag": "20260605091418_AddUserProfileFields",
+      "breakpoints": true
     }
   ]
 }

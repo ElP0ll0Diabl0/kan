@@ -13,8 +13,12 @@ import { api } from "~/utils/api";
 import { getAvatarUrl } from "~/utils/helpers";
 import { AddMembershipModal } from "./components/AddMembershipModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { MemberBoardScope } from "./components/MemberBoardScope";
+import { MemberEditForm } from "./components/MemberEditForm";
 
 type WorkspaceRole = "admin" | "member" | "guest";
+
+type MemberTab = "overview" | "edit";
 
 type Dialog =
   | { type: "promote" }
@@ -39,6 +43,7 @@ export function MemberDetail() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [banReason, setBanReason] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [tab, setTab] = useState<MemberTab>("overview");
 
   const { data, isLoading } = api.admin.getUser.useQuery(
     { userId: userId ?? "" },
@@ -233,10 +238,36 @@ export function MemberDetail() {
         </dl>
       </div>
 
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-neutral-900 dark:text-dark-1000">
-          {t`Workspace memberships`}
-        </h3>
+      <div className="mb-6 border-b border-light-300 dark:border-dark-300">
+        <nav aria-label="Member tabs" className="-mb-px flex space-x-8">
+          {(
+            [
+              { key: "overview", label: t`Overview` },
+              { key: "edit", label: t`Edit` },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors focus:outline-none ${
+                tab === item.key
+                  ? "border-light-1000 text-light-1000 dark:border-dark-1000 dark:text-dark-1000"
+                  : "border-transparent text-light-900 hover:border-light-950 hover:text-light-950 dark:text-dark-900 dark:hover:border-white/20 dark:hover:text-dark-950"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {tab === "overview" && (
+        <>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-dark-1000">
+              {t`Workspace memberships`}
+            </h3>
         <Button
           variant="secondary"
           iconLeft={<HiOutlinePlusSmall className="h-4 w-4" />}
@@ -328,6 +359,42 @@ export function MemberDetail() {
           </tbody>
         </table>
       </div>
+        </>
+      )}
+
+      {tab === "edit" && (
+        <div className="space-y-6">
+          <MemberEditForm
+            userId={userId}
+            initial={{
+              name: data.name,
+              department: data.department,
+              title: data.title,
+            }}
+          />
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-dark-1000">
+              {t`Board access`}
+            </h3>
+            {data.memberships.length === 0 ? (
+              <p className="text-sm text-light-900 dark:text-dark-900">
+                {t`Not a member of any workspace`}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {data.memberships.map((membership) => (
+                  <MemberBoardScope
+                    key={membership.publicId}
+                    userId={userId}
+                    workspacePublicId={membership.workspace.publicId}
+                    workspaceName={membership.workspace.name}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {dialogProps && (
         <ConfirmDialog

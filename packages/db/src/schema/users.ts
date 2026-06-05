@@ -25,6 +25,9 @@ export const users = pgTable("user", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
   image: varchar("image", { length: 255 }),
+  // Optional org-profile fields, editable by instance admins.
+  department: varchar("department", { length: 255 }),
+  title: varchar("title", { length: 255 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
