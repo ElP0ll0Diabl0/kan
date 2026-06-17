@@ -260,6 +260,13 @@
       "when": 1780650858042,
       "tag": "20260605091418_AddUserProfileFields",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781688423935,
+      "tag": "20260617092703_AddPendingBoardMembers",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,10 @@ import { createAuthMiddleware } from "better-auth/api";
 import { env } from "next-runtime-env";
 
 import type { dbClient } from "@kan/db/client";
+import * as boardRepo from "@kan/db/repository/board.repo";
+import * as boardMemberRepo from "@kan/db/repository/boardMember.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
+import * as pendingBoardMemberRepo from "@kan/db/repository/pendingBoardMember.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
 import { notificationClient } from "@kan/email";
 import { createLogger } from "@kan/logger";
@@ -166,6 +169,53 @@ export function createDatabaseHooks(db: dbClient) {
   };
 }
 
+/**
+ * Applies any board-access grants parked for an invited member once they have
+ * a real account. Grants are skipped if the board is gone, is no longer
+ * restricted, or the user is already a board member. Pending rows are cleared
+ * afterwards. Best-effort: never throws into the auth flow.
+ */
+export async function applyPendingBoardMembers(
+  db: dbClient,
+  args: { workspaceMemberId: number; userId: string; createdBy: string | null },
+) {
+  try {
+    const pending = await pendingBoardMemberRepo.listByWorkspaceMemberId(
+      db,
+      args.workspaceMemberId,
+    );
+
+    for (const grant of pending) {
+      const board = await boardRepo.getAccessById(db, grant.boardId);
+      if (!board || board.accessLevel !== "restricted") continue;
+
+      const existing = await boardMemberRepo.getByBoardAndUser(
+        db,
+        grant.boardId,
+        args.userId,
+      );
+      if (existing) continue;
+
+      await boardMemberRepo.create(db, {
+        boardId: grant.boardId,
+        userId: args.userId,
+        role: grant.role,
+        createdBy: args.createdBy ?? args.userId,
+      });
+    }
+
+    await pendingBoardMemberRepo.deleteByWorkspaceMemberId(
+      db,
+      args.workspaceMemberId,
+    );
+  } catch (error) {
+    log.error(
+      { err: error, workspaceMemberId: args.workspaceMemberId },
+      "Failed to apply pending board memberships",
+    );
+  }
+}
+
 export function createMiddlewareHooks(db: dbClient) {
   return {
     after: createAuthMiddleware(async (ctx) => {
@@ -184,6 +234,12 @@ export function createMiddlewareHooks(db: dbClient) {
             await memberRepo.acceptInvite(db, {
               memberId: member.id,
               userId,
+            });
+
+            await applyPendingBoardMembers(db, {
+              workspaceMemberId: member.id,
+              userId,
+              createdBy: member.createdBy,
             });
           }
         }

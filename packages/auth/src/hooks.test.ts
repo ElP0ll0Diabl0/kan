@@ -14,6 +14,20 @@ vi.mock("@kan/db/repository/user.repo", () => ({
   update: vi.fn(),
 }));
 
+vi.mock("@kan/db/repository/board.repo", () => ({
+  getAccessById: vi.fn(),
+}));
+
+vi.mock("@kan/db/repository/boardMember.repo", () => ({
+  getByBoardAndUser: vi.fn(),
+  create: vi.fn(),
+}));
+
+vi.mock("@kan/db/repository/pendingBoardMember.repo", () => ({
+  listByWorkspaceMemberId: vi.fn(),
+  deleteByWorkspaceMemberId: vi.fn(),
+}));
+
 vi.mock("@kan/email", () => ({
   notificationClient: null,
 }));
@@ -32,12 +46,24 @@ vi.mock("@novu/api/models/components", () => ({
 }));
 
 import { env } from "next-runtime-env";
+import * as boardRepo from "@kan/db/repository/board.repo";
+import * as boardMemberRepo from "@kan/db/repository/boardMember.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
-import { createDatabaseHooks } from "./hooks";
+import * as pendingBoardMemberRepo from "@kan/db/repository/pendingBoardMember.repo";
+import { applyPendingBoardMembers, createDatabaseHooks } from "./hooks";
 
 const mockEnv = env as ReturnType<typeof vi.fn>;
 const mockGetByEmailAndStatus =
   memberRepo.getByEmailAndStatus as ReturnType<typeof vi.fn>;
+const mockGetAccessById = boardRepo.getAccessById as ReturnType<typeof vi.fn>;
+const mockGetByBoardAndUser =
+  boardMemberRepo.getByBoardAndUser as ReturnType<typeof vi.fn>;
+const mockBoardMemberCreate =
+  boardMemberRepo.create as ReturnType<typeof vi.fn>;
+const mockListPending =
+  pendingBoardMemberRepo.listByWorkspaceMemberId as ReturnType<typeof vi.fn>;
+const mockDeletePending =
+  pendingBoardMemberRepo.deleteByWorkspaceMemberId as ReturnType<typeof vi.fn>;
 
 const db = {} as Parameters<typeof createDatabaseHooks>[0];
 
@@ -191,5 +217,122 @@ describe("createDatabaseHooks", () => {
 
       delete process.env.BETTER_AUTH_ALLOWED_DOMAINS;
     });
+  });
+});
+
+describe("applyPendingBoardMembers", () => {
+  const db = {} as Parameters<typeof applyPendingBoardMembers>[0];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates board memberships for still-restricted boards then clears pending rows", async () => {
+    mockListPending.mockResolvedValue([
+      { id: 1, boardId: 10, role: "editor" },
+      { id: 2, boardId: 20, role: "admin" },
+    ]);
+    mockGetAccessById.mockResolvedValue({
+      id: 10,
+      accessLevel: "restricted",
+      workspaceId: 1,
+    });
+    mockGetByBoardAndUser.mockResolvedValue(undefined);
+
+    await applyPendingBoardMembers(db, {
+      workspaceMemberId: 5,
+      userId: "user-1",
+      createdBy: "admin-1",
+    });
+
+    expect(mockBoardMemberCreate).toHaveBeenCalledTimes(2);
+    expect(mockBoardMemberCreate).toHaveBeenCalledWith(db, {
+      boardId: 10,
+      userId: "user-1",
+      role: "editor",
+      createdBy: "admin-1",
+    });
+    expect(mockDeletePending).toHaveBeenCalledWith(db, 5);
+  });
+
+  it("skips boards that no longer exist or are no longer restricted", async () => {
+    mockListPending.mockResolvedValue([
+      { id: 1, boardId: 10, role: "editor" }, // missing
+      { id: 2, boardId: 20, role: "viewer" }, // now workspace-access
+    ]);
+    mockGetAccessById.mockImplementation((_db, boardId: number) =>
+      boardId === 20
+        ? Promise.resolve({ id: 20, accessLevel: "workspace", workspaceId: 1 })
+        : Promise.resolve(undefined),
+    );
+    mockGetByBoardAndUser.mockResolvedValue(undefined);
+
+    await applyPendingBoardMembers(db, {
+      workspaceMemberId: 5,
+      userId: "user-1",
+      createdBy: "admin-1",
+    });
+
+    expect(mockBoardMemberCreate).not.toHaveBeenCalled();
+    expect(mockDeletePending).toHaveBeenCalledWith(db, 5);
+  });
+
+  it("skips boards where the user is already a member", async () => {
+    mockListPending.mockResolvedValue([
+      { id: 1, boardId: 10, role: "editor" },
+    ]);
+    mockGetAccessById.mockResolvedValue({
+      id: 10,
+      accessLevel: "restricted",
+      workspaceId: 1,
+    });
+    mockGetByBoardAndUser.mockResolvedValue({ id: 99 });
+
+    await applyPendingBoardMembers(db, {
+      workspaceMemberId: 5,
+      userId: "user-1",
+      createdBy: "admin-1",
+    });
+
+    expect(mockBoardMemberCreate).not.toHaveBeenCalled();
+    expect(mockDeletePending).toHaveBeenCalledWith(db, 5);
+  });
+
+  it("falls back to the userId as createdBy when the inviter is unknown", async () => {
+    mockListPending.mockResolvedValue([
+      { id: 1, boardId: 10, role: "viewer" },
+    ]);
+    mockGetAccessById.mockResolvedValue({
+      id: 10,
+      accessLevel: "restricted",
+      workspaceId: 1,
+    });
+    mockGetByBoardAndUser.mockResolvedValue(undefined);
+
+    await applyPendingBoardMembers(db, {
+      workspaceMemberId: 5,
+      userId: "user-1",
+      createdBy: null,
+    });
+
+    expect(mockBoardMemberCreate).toHaveBeenCalledWith(db, {
+      boardId: 10,
+      userId: "user-1",
+      role: "viewer",
+      createdBy: "user-1",
+    });
+  });
+
+  it("does nothing destructive when there are no pending rows", async () => {
+    mockListPending.mockResolvedValue([]);
+
+    await applyPendingBoardMembers(db, {
+      workspaceMemberId: 5,
+      userId: "user-1",
+      createdBy: "admin-1",
+    });
+
+    expect(mockBoardMemberCreate).not.toHaveBeenCalled();
+    expect(mockDeletePending).toHaveBeenCalledWith(db, 5);
   });
 });
