@@ -72,6 +72,19 @@ const createAuthWithHeaders = (
           headers,
           body: { newPassword: input.newPassword },
         }),
+      // Admin-only (better-auth admin plugin): set another user's password.
+      setUserPassword: (input: { userId: string; newPassword: string }) =>
+        auth.api.setUserPassword({
+          headers,
+          body: { userId: input.userId, newPassword: input.newPassword },
+        }),
+      // Sends a password-reset email; redirectTo is the client page that
+      // collects the new password using the forwarded token.
+      requestPasswordReset: (input: { email: string; redirectTo: string }) =>
+        auth.api.requestPasswordReset({
+          headers,
+          body: { email: input.email, redirectTo: input.redirectTo },
+        }),
     },
   };
 };
