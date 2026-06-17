@@ -15,6 +15,7 @@ import { AddMembershipModal } from "./components/AddMembershipModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { MemberBoardScope } from "./components/MemberBoardScope";
 import { MemberEditForm } from "./components/MemberEditForm";
+import { MemberSecuritySection } from "./components/MemberSecuritySection";
 
 type WorkspaceRole = "admin" | "member" | "guest";
 
@@ -372,6 +373,7 @@ export function MemberDetail() {
               title: data.title,
             }}
           />
+          <MemberSecuritySection userId={userId} email={data.email} />
           <div>
             <h3 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-dark-1000">
               {t`Board access`}

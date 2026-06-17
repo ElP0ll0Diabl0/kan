@@ -15,8 +15,12 @@ import { sendEmail } from "@kan/email";
 import { createLogger } from "@kan/logger";
 
 import { createTRPCRouter, superAdminProcedure } from "../trpc";
+import { isSuperAdminEmail } from "../utils/superAdmin";
 
 const log = createLogger("admin");
+
+const isCredentialsEnabled = () =>
+  env("NEXT_PUBLIC_ALLOW_CREDENTIALS")?.toLowerCase() === "true";
 
 const listInput = z.object({
   limit: z.number().int().min(1).max(100).default(50),
@@ -560,6 +564,73 @@ export const adminRouter = createTRPCRouter({
         name: input.name,
         department: input.department,
         title: input.title,
+      });
+
+      return { success: true };
+    }),
+
+  // Directly sets a user's password (better-auth admin plugin). Only usable
+  // when credentials auth is enabled. The admin relays the password to the
+  // user, who can change it later in Settings.
+  setUserPassword: superAdminProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        newPassword: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!isCredentialsEnabled()) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Password auth is disabled. Set NEXT_PUBLIC_ALLOW_CREDENTIALS to enable it.",
+        });
+      }
+
+      const user = await userRepo.getById(ctx.db, input.userId);
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      // The better-auth admin plugin gates setUserPassword on the caller's DB
+      // role being "admin", whereas superAdminProcedure also admits emails in
+      // the KAN_SUPERADMIN_EMAILS allowlist. Reconcile the two: if the caller
+      // is an allowlisted superadmin who was never promoted (e.g. added to the
+      // allowlist after sign-up), promote them now so the plugin call succeeds.
+      if (ctx.user.role !== "admin" && isSuperAdminEmail(ctx.user.email)) {
+        await userRepo.updateRole(ctx.db, ctx.user.id, "admin");
+      }
+
+      await ctx.auth.api.setUserPassword({
+        userId: input.userId,
+        newPassword: input.newPassword,
+      });
+
+      return { success: true };
+    }),
+
+  // Emails the user a password-reset link (better-auth requestPasswordReset).
+  // The link lands on /reset-password with the forwarded token.
+  sendPasswordReset: superAdminProcedure
+    .input(z.object({ userId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isCredentialsEnabled()) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Password auth is disabled. Set NEXT_PUBLIC_ALLOW_CREDENTIALS to enable it.",
+        });
+      }
+
+      const user = await userRepo.getById(ctx.db, input.userId);
+      if (!user?.email) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      await ctx.auth.api.requestPasswordReset({
+        email: user.email,
+        redirectTo: "/reset-password",
       });
 
       return { success: true };
