@@ -1,14 +1,16 @@
 import { useRouter } from "next/router";
 import { t } from "@lingui/core/macro";
 import { useState } from "react";
-import { HiMagnifyingGlass } from "react-icons/hi2";
+import { HiMagnifyingGlass, HiOutlinePlusSmall } from "react-icons/hi2";
 
 import Avatar from "~/components/Avatar";
+import Button from "~/components/Button";
 import { PageHead } from "~/components/PageHead";
 import { useDebounce } from "~/hooks/useDebounce";
 import { api } from "~/utils/api";
 import { getAvatarUrl } from "~/utils/helpers";
 import { AdminPagination } from "./components/AdminPagination";
+import { InviteMemberModal } from "./components/InviteMemberModal";
 
 const PAGE_SIZE = 25;
 
@@ -17,6 +19,7 @@ export function Members() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [debouncedSearch] = useDebounce(search, 300);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const { data, isLoading } = api.admin.listUsers.useQuery({
     limit: PAGE_SIZE,
@@ -29,18 +32,26 @@ export function Members() {
   return (
     <>
       <PageHead title={t`Admin | Members`} />
-      <div className="relative mb-4 max-w-sm">
-        <HiMagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-light-900 dark:text-dark-900" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(0);
-          }}
-          placeholder={t`Search by name or email`}
-          className="w-full rounded-lg border-0 bg-light-50 py-2 pl-9 pr-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500"
-        />
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="relative max-w-sm flex-1">
+          <HiMagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-light-900 dark:text-dark-900" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            placeholder={t`Search by name or email`}
+            className="w-full rounded-lg border-0 bg-light-50 py-2 pl-9 pr-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500"
+          />
+        </div>
+        <Button
+          onClick={() => setIsInviteOpen(true)}
+          iconLeft={<HiOutlinePlusSmall className="h-4 w-4" />}
+        >
+          {t`Invite`}
+        </Button>
       </div>
 
       <div className="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
@@ -141,6 +152,11 @@ export function Members() {
         pageSize={PAGE_SIZE}
         total={data?.total ?? 0}
         onPageChange={setPage}
+      />
+
+      <InviteMemberModal
+        isOpen={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
       />
     </>
   );

@@ -196,6 +196,62 @@ export const getAccessByPublicId = async (
   });
 };
 
+/** Minimal board context for board-level access checks, by internal id. */
+export const getAccessById = async (db: dbClient, boardId: number) => {
+  return db.query.boards.findFirst({
+    columns: {
+      id: true,
+      workspaceId: true,
+      accessLevel: true,
+      createdBy: true,
+    },
+    where: eq(boards.id, boardId),
+  });
+};
+
+/**
+ * Resolves several boards by publicId, returning access level plus name/slug.
+ * Used to validate an admin invite's board selection and to build board links
+ * in the notification email in a single query.
+ */
+export const getAccessAndMetaByPublicIds = async (
+  db: dbClient,
+  boardPublicIds: string[],
+) => {
+  if (boardPublicIds.length === 0) return [];
+
+  return db.query.boards.findMany({
+    columns: {
+      id: true,
+      publicId: true,
+      workspaceId: true,
+      accessLevel: true,
+      name: true,
+      slug: true,
+    },
+    where: and(
+      inArray(boards.publicId, boardPublicIds),
+      isNull(boards.deletedAt),
+    ),
+  });
+};
+
+/** Restricted boards in a workspace, for board-access pickers. */
+export const listRestrictedByWorkspaceId = async (
+  db: dbClient,
+  workspaceId: number,
+) => {
+  return db.query.boards.findMany({
+    columns: { publicId: true, name: true },
+    where: and(
+      eq(boards.workspaceId, workspaceId),
+      eq(boards.accessLevel, "restricted"),
+      isNull(boards.deletedAt),
+    ),
+    orderBy: asc(boards.name),
+  });
+};
+
 export const setAccessLevel = async (
   db: dbClient,
   boardPublicId: string,

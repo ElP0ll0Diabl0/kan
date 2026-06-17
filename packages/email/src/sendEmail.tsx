@@ -4,18 +4,25 @@ import { createLogger } from "@kan/logger";
 
 const log = createLogger("email");
 
+import AddedToWorkspaceTemplate from "./templates/added-to-workspace";
 import JoinWorkspaceTemplate from "./templates/join-workspace";
 import MagicLinkTemplate from "./templates/magic-link";
 import MentionTemplate from "./templates/mention";
 import ResetPasswordTemplate from "./templates/reset-password";
 
-type Templates = "MAGIC_LINK" | "JOIN_WORKSPACE" | "RESET_PASSWORD" | "MENTION";
+type Templates =
+  | "MAGIC_LINK"
+  | "JOIN_WORKSPACE"
+  | "RESET_PASSWORD"
+  | "MENTION"
+  | "ADDED_TO_WORKSPACE";
 
 const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   MAGIC_LINK: MagicLinkTemplate,
   JOIN_WORKSPACE: JoinWorkspaceTemplate,
   RESET_PASSWORD: ResetPasswordTemplate,
   MENTION: MentionTemplate,
+  ADDED_TO_WORKSPACE: AddedToWorkspaceTemplate,
 };
 
 const transporter = nodemailer.createTransport({

@@ -17,7 +17,7 @@ import { imports } from "./imports";
 import { labels } from "./labels";
 import { lists } from "./lists";
 import { users } from "./users";
-import { workspaces } from "./workspaces";
+import { workspaceMembers, workspaces } from "./workspaces";
 
 export const boardVisibilityStatuses = ["private", "public"] as const;
 export type BoardVisibilityStatus = (typeof boardVisibilityStatuses)[number];
@@ -180,3 +180,51 @@ export const boardMembersRelations = relations(boardMembers, ({ one }) => ({
     relationName: "boardMembersUser",
   }),
 }));
+
+// Deferred board access for invited (not-yet-registered) members. When an
+// admin invites a user to a workspace and grants restricted-board access, the
+// board membership cannot be created yet because board_members.userId is NOT
+// NULL and the invitee has no account. The intended grants are parked here and
+// applied when the invite is accepted (see applyPendingBoardMembers in the
+// auth middleware hooks).
+export const pendingBoardMembers = pgTable(
+  "pending_board_members",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    publicId: varchar("publicId", { length: 12 }).notNull().unique(),
+    workspaceMemberId: bigint("workspaceMemberId", { mode: "number" })
+      .notNull()
+      .references(() => workspaceMembers.id, { onDelete: "cascade" }),
+    boardId: bigint("boardId", { mode: "number" })
+      .notNull()
+      .references(() => boards.id, { onDelete: "cascade" }),
+    role: boardMemberRoleEnum("role").notNull().default("editor"),
+    createdBy: uuid("createdBy").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("unique_pending_board_member").on(
+      table.workspaceMemberId,
+      table.boardId,
+    ),
+    index("pending_board_members_member_idx").on(table.workspaceMemberId),
+  ],
+).enableRLS();
+
+export const pendingBoardMembersRelations = relations(
+  pendingBoardMembers,
+  ({ one }) => ({
+    board: one(boards, {
+      fields: [pendingBoardMembers.boardId],
+      references: [boards.id],
+      relationName: "pendingBoardMembersBoard",
+    }),
+    member: one(workspaceMembers, {
+      fields: [pendingBoardMembers.workspaceMemberId],
+      references: [workspaceMembers.id],
+      relationName: "pendingBoardMembersMember",
+    }),
+  }),
+);
