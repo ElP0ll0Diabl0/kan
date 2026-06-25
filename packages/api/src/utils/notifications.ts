@@ -498,12 +498,15 @@ export async function dispatchNotification(
     // {{tokens}} in custom subject/body are substituted from the event's
     // data object before delivery. customBody !=null switches the dispatch
     // to the CUSTOM_CONTENT template so the admin's HTML is the body.
+    //
+    // The subject substitution happens once (no per-recipient data in the
+    // subject). The body substitution defers to inside the recipient loop
+    // because we want {{unsubscribeUrl}} to resolve to a per-recipient JWT
+    // link, not the event-shared template.
     const subjectTemplate = rule.customSubject?.trim() || ctx.defaultSubject;
     const subject = substituteTokens(subjectTemplate, ctx.data);
-    const useCustomBody = (rule.customBody?.trim().length ?? 0) > 0;
-    const customBodyHtml = useCustomBody
-      ? substituteTokens(rule.customBody ?? "", ctx.data)
-      : null;
+    const customBodyTemplate =
+      (rule.customBody?.trim().length ?? 0) > 0 ? rule.customBody : null;
 
     log.info(
       { event: args.event, recipientCount: recipients.length, workspaceId: ctx.workspaceId },
@@ -538,7 +541,13 @@ export async function dispatchNotification(
           const unsubscribeUrl =
             (await createEmailUnsubscribeLink(recipient.userId)) ?? "";
 
-          if (customBodyHtml !== null) {
+          if (customBodyTemplate !== null) {
+            // Substitute per-recipient (the only field that varies is
+            // unsubscribeUrl). All other tokens already resolved from ctx.data.
+            const customBodyHtml = substituteTokens(customBodyTemplate, {
+              ...ctx.data,
+              unsubscribeUrl,
+            });
             await sendEmail(recipient.email, subject, "CUSTOM_CONTENT", {
               heading: subject,
               bodyHtml: customBodyHtml,

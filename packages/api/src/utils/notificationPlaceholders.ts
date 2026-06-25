@@ -22,7 +22,18 @@ export interface NotificationPlaceholder {
   label: string;
 }
 
-export const EVENT_PLACEHOLDERS: Record<
+/**
+ * Available on every event — substituted to a per-recipient JWT unsubscribe
+ * link inside the dispatcher loop. Admins can drop `{{unsubscribeUrl}}` into
+ * a custom body to position the link wherever they want; if they don't, the
+ * CUSTOM_CONTENT template appends a minimal Unsubscribe footer automatically.
+ */
+const UNSUBSCRIBE_PLACEHOLDER: NotificationPlaceholder = {
+  key: "unsubscribeUrl",
+  label: "Unsubscribe URL",
+};
+
+const PER_EVENT_PLACEHOLDERS: Record<
   NotificationEventType,
   readonly NotificationPlaceholder[]
 > = {
@@ -98,6 +109,21 @@ export const EVENT_PLACEHOLDERS: Record<
     { key: "actorName", label: "Actor name" },
   ],
 };
+
+/**
+ * Public registry: event-specific tokens plus the universal {{unsubscribeUrl}}.
+ * Built once at module load; both the dispatcher (substitution) and the
+ * editor UI (dropdown) consume this same shape.
+ */
+export const EVENT_PLACEHOLDERS: Record<
+  NotificationEventType,
+  readonly NotificationPlaceholder[]
+> = Object.fromEntries(
+  Object.entries(PER_EVENT_PLACEHOLDERS).map(([event, placeholders]) => [
+    event,
+    [...placeholders, UNSUBSCRIBE_PLACEHOLDER],
+  ]),
+) as unknown as Record<NotificationEventType, readonly NotificationPlaceholder[]>;
 
 const TOKEN_RE = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g;
 
