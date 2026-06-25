@@ -19,6 +19,7 @@ import { createTRPCRouter, superAdminProcedure } from "../trpc";
 import {
   dispatchNotification,
   EVENT_DEFAULT_ENABLED,
+  EVENT_DEFAULT_TEAMS_ENABLED,
 } from "../utils/notifications";
 import { isSuperAdminEmail } from "../utils/superAdmin";
 
@@ -919,6 +920,9 @@ export const adminRouter = createTRPCRouter({
         return {
           eventType,
           enabled: rule ? rule.enabled : EVENT_DEFAULT_ENABLED[eventType],
+          teamsEnabled: rule
+            ? rule.teamsEnabled
+            : EVENT_DEFAULT_TEAMS_ENABLED[eventType],
           customSubject: rule?.customSubject ?? null,
           hasRule: !!rule,
         };
@@ -930,6 +934,7 @@ export const adminRouter = createTRPCRouter({
       z.object({
         eventType: notificationEventInput,
         enabled: z.boolean(),
+        teamsEnabled: z.boolean(),
         customSubject: customSubjectInput,
       }),
     )
@@ -938,6 +943,7 @@ export const adminRouter = createTRPCRouter({
         workspaceId: null,
         eventType: input.eventType as (typeof notificationEventTypes)[number],
         enabled: input.enabled,
+        teamsEnabled: input.teamsEnabled,
         customSubject: input.customSubject,
         createdBy: ctx.user.id,
       });
@@ -978,10 +984,17 @@ export const adminRouter = createTRPCRouter({
             enabled: globalRule
               ? globalRule.enabled
               : EVENT_DEFAULT_ENABLED[eventType],
+            teamsEnabled: globalRule
+              ? globalRule.teamsEnabled
+              : EVENT_DEFAULT_TEAMS_ENABLED[eventType],
             customSubject: globalRule?.customSubject ?? null,
           },
           override: override
-            ? { enabled: override.enabled, customSubject: override.customSubject }
+            ? {
+                enabled: override.enabled,
+                teamsEnabled: override.teamsEnabled,
+                customSubject: override.customSubject,
+              }
             : null,
         };
       });
@@ -993,6 +1006,7 @@ export const adminRouter = createTRPCRouter({
         workspacePublicId: z.string().min(12),
         eventType: notificationEventInput,
         enabled: z.boolean(),
+        teamsEnabled: z.boolean(),
         customSubject: customSubjectInput,
       }),
     )
@@ -1012,6 +1026,7 @@ export const adminRouter = createTRPCRouter({
         workspaceId: workspace.id,
         eventType: input.eventType as (typeof notificationEventTypes)[number],
         enabled: input.enabled,
+        teamsEnabled: input.teamsEnabled,
         customSubject: input.customSubject,
         createdBy: ctx.user.id,
       });

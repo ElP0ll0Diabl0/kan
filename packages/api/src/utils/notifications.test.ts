@@ -46,14 +46,24 @@ vi.mock("@kan/db/repository/user.repo", () => ({
 vi.mock("@kan/db/repository/workspace.repo", () => ({
   getByPublicId: vi.fn(async () => ({ id: 10 })),
 }));
+vi.mock("@kan/db/repository/teamsConversation.repo", () => ({
+  getByUserId: vi.fn(async () => null),
+}));
+vi.mock("@kan/teams", () => ({
+  isTeamsEnabled: vi.fn(() => false),
+  sendProactiveCard: vi.fn(),
+  buildNotificationCard: vi.fn((input: unknown) => input),
+}));
 
 import * as cardRepo from "@kan/db/repository/card.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
 import * as notificationRepo from "@kan/db/repository/notification.repo";
 import * as notificationRuleRepo from "@kan/db/repository/notificationRule.repo";
+import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
 import { sendEmail } from "@kan/email";
 import { parseMentionsFromHTML } from "@kan/shared/utils";
+import { isTeamsEnabled, sendProactiveCard } from "@kan/teams";
 
 import type { dbClient } from "@kan/db/client";
 import {
@@ -71,6 +81,9 @@ const mockExists = notificationRepo.exists as ReturnType<typeof vi.fn>;
 const mockGetResolvedRules = notificationRuleRepo.getResolvedRules as ReturnType<typeof vi.fn>;
 const mockUserGetById = userRepo.getById as ReturnType<typeof vi.fn>;
 const mockIsUnsubscribed = userRepo.isEmailUnsubscribed as ReturnType<typeof vi.fn>;
+const mockIsTeamsEnabled = isTeamsEnabled as ReturnType<typeof vi.fn>;
+const mockSendProactiveCard = sendProactiveCard as ReturnType<typeof vi.fn>;
+const mockGetConversation = teamsConversationRepo.getByUserId as ReturnType<typeof vi.fn>;
 
 const db = {} as dbClient;
 const ACTOR = "actor-user";
@@ -90,6 +103,8 @@ beforeEach(() => {
   mockExists.mockResolvedValue(false);
   mockIsUnsubscribed.mockResolvedValue(false);
   mockGetResolvedRules.mockResolvedValue(new Map());
+  mockIsTeamsEnabled.mockReturnValue(false);
+  mockGetConversation.mockResolvedValue(null);
   mockUserGetById.mockImplementation(async (_db: unknown, id: string) =>
     id === ACTOR ? { id: ACTOR, name: "Actor", email: "actor@test.com" } : null,
   );
@@ -104,23 +119,33 @@ describe("resolveRule", () => {
     mockGetResolvedRules.mockResolvedValue(new Map());
 
     const mention = await resolveRule(db, 10, "mention");
-    expect(mention.enabled).toBe(EVENT_DEFAULT_ENABLED.mention); // true
-    expect(mention.enabled).toBe(true);
+    expect(mention.emailEnabled).toBe(EVENT_DEFAULT_ENABLED.mention); // true
+    expect(mention.emailEnabled).toBe(true);
+    expect(mention.teamsEnabled).toBe(false); // Teams is opt-in by default
     expect(mention.customSubject).toBeNull();
 
     const cardCreated = await resolveRule(db, 10, "card.created");
-    expect(cardCreated.enabled).toBe(false);
+    expect(cardCreated.emailEnabled).toBe(false);
   });
 
-  it("uses the resolved rule's enabled flag and custom subject", async () => {
+  it("uses the resolved rule's channel flags and custom subject", async () => {
     mockGetResolvedRules.mockResolvedValue(
       new Map([
-        ["mention", { enabled: false, customSubject: "Custom", source: "workspace" }],
+        [
+          "mention",
+          {
+            enabled: false,
+            teamsEnabled: true,
+            customSubject: "Custom",
+            source: "workspace",
+          },
+        ],
       ]),
     );
 
     const rule = await resolveRule(db, 10, "mention");
-    expect(rule.enabled).toBe(false);
+    expect(rule.emailEnabled).toBe(false);
+    expect(rule.teamsEnabled).toBe(true);
     expect(rule.customSubject).toBe("Custom");
   });
 });
@@ -330,5 +355,104 @@ describe("dispatchNotification — card events", () => {
 
     const [, subject] = mockSendEmail.mock.calls[0]!;
     expect(subject).toBe("Custom subject");
+  });
+});
+
+describe("dispatchNotification — Teams channel", () => {
+  const ruleMap = (entry: {
+    enabled: boolean;
+    teamsEnabled: boolean;
+    customSubject?: string | null;
+  }) =>
+    new Map([
+      [
+        "card.comment.added",
+        {
+          enabled: entry.enabled,
+          teamsEnabled: entry.teamsEnabled,
+          customSubject: entry.customSubject ?? null,
+          source: "global",
+        },
+      ],
+    ]);
+
+  const commentArgs = {
+    event: "card.comment.added" as const,
+    actorUserId: ACTOR,
+    cardPublicId: "card-public-1",
+    commentId: 5,
+  };
+
+  beforeEach(() => {
+    mockGetCard.mockResolvedValue(
+      cardWithMembers([
+        { email: "m1@test.com", user: { id: "user-1", name: "M1" } },
+      ]),
+    );
+  });
+
+  it("sends a Teams card when teamsEnabled + bot configured + linked", async () => {
+    mockGetResolvedRules.mockResolvedValue(
+      ruleMap({ enabled: false, teamsEnabled: true }),
+    );
+    mockIsTeamsEnabled.mockReturnValue(true);
+    mockGetConversation.mockResolvedValue({ conversationReference: "{}" });
+
+    await dispatchNotification(db, commentArgs);
+
+    expect(mockSendProactiveCard).toHaveBeenCalledTimes(1);
+    // Email channel was off for this rule.
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send a Teams card when the bot is not configured", async () => {
+    mockGetResolvedRules.mockResolvedValue(
+      ruleMap({ enabled: false, teamsEnabled: true }),
+    );
+    mockIsTeamsEnabled.mockReturnValue(false);
+    mockGetConversation.mockResolvedValue({ conversationReference: "{}" });
+
+    await dispatchNotification(db, commentArgs);
+
+    expect(mockSendProactiveCard).not.toHaveBeenCalled();
+  });
+
+  it("does not send a Teams card when the recipient has no linked conversation", async () => {
+    mockGetResolvedRules.mockResolvedValue(
+      ruleMap({ enabled: false, teamsEnabled: true }),
+    );
+    mockIsTeamsEnabled.mockReturnValue(true);
+    mockGetConversation.mockResolvedValue(null);
+
+    await dispatchNotification(db, commentArgs);
+
+    expect(mockSendProactiveCard).not.toHaveBeenCalled();
+  });
+
+  it("fans out to both channels independently", async () => {
+    mockGetResolvedRules.mockResolvedValue(
+      ruleMap({ enabled: true, teamsEnabled: true }),
+    );
+    mockIsTeamsEnabled.mockReturnValue(true);
+    mockGetConversation.mockResolvedValue({ conversationReference: "{}" });
+
+    await dispatchNotification(db, commentArgs);
+
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendProactiveCard).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Teams send failure does not block the email channel", async () => {
+    mockGetResolvedRules.mockResolvedValue(
+      ruleMap({ enabled: true, teamsEnabled: true }),
+    );
+    mockIsTeamsEnabled.mockReturnValue(true);
+    mockGetConversation.mockResolvedValue({ conversationReference: "{}" });
+    mockSendProactiveCard.mockRejectedValueOnce(new Error("teams down"));
+
+    await dispatchNotification(db, commentArgs);
+
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockLogger.error).toHaveBeenCalled();
   });
 });

@@ -51,7 +51,10 @@ export const notificationRules = pgTable(
       { onDelete: "cascade" },
     ),
     eventType: notificationEventTypeEnum("eventType").notNull(),
+    // `enabled` gates the email channel (kept for backwards compatibility);
+    // `teamsEnabled` gates the Microsoft Teams channel.
     enabled: boolean("enabled").notNull().default(true),
+    teamsEnabled: boolean("teamsEnabled").notNull().default(false),
     customSubject: varchar("customSubject", { length: 255 }),
     createdBy: uuid("createdBy")
       .notNull()

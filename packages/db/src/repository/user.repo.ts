@@ -89,6 +89,18 @@ export const getByEmail = (db: dbClient, email: string) => {
   });
 };
 
+/** Looks up a user by their Entra directory object id (Teams bot linking). */
+export const getByEntraObjectId = (db: dbClient, entraObjectId: string) => {
+  return db.query.users.findFirst({
+    columns: {
+      id: true,
+      name: true,
+      email: true,
+    },
+    where: eq(users.entraObjectId, entraObjectId),
+  });
+};
+
 export const create = async (
   db: dbClient,
   user: { id?: string; email: string; stripeCustomerId?: string },

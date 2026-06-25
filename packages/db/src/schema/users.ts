@@ -40,6 +40,9 @@ export const users = pgTable("user", {
   // Set when the user opts out of all notification emails (DB-backed
   // unsubscribe, honoured on self-hosted where Novu is not configured).
   emailUnsubscribedAt: timestamp("emailUnsubscribedAt"),
+  // Entra ID directory object id (the `oid` claim) captured at Microsoft/OIDC
+  // sign-in. Used to auto-link a Teams identity to this user.
+  entraObjectId: varchar("entraObjectId", { length: 255 }),
 }).enableRLS();
 
 export const usersRelations = relations(users, ({ many }) => ({

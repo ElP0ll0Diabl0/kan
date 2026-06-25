@@ -273,6 +273,7 @@ export function createPlugins(db: dbClient) {
                   email?: string;
                   email_verified?: boolean;
                   sub?: string;
+                  oid?: string;
                   picture?: string;
                   avatar?: string;
                 }) => {
@@ -293,6 +294,8 @@ export function createPlugins(db: dbClient) {
                     name: name,
                     emailVerified: profile.email_verified ?? false,
                     image: profile.picture ?? profile.avatar ?? null,
+                    // Entra directory object id, for Teams bot auto-linking.
+                    ...(profile.oid ? { entraObjectId: profile.oid } : {}),
                   };
                 },
               },

@@ -15,6 +15,9 @@ export const configuredProviders = socialProviderList.reduce<
       // Google-specific optional hints
       hostedDomain?: string;
       hd?: string;
+      mapProfileToUser?: (profile: Record<string, unknown>) => {
+        entraObjectId?: string;
+      };
     }
   >
 >((acc, provider) => {
@@ -51,6 +54,11 @@ export const configuredProviders = socialProviderList.reduce<
   ) {
     acc[provider].tenantId = "common";
     acc[provider].requireSelectAccount = true;
+    // Capture the Entra directory object id (`oid`) so the Teams bot can
+    // auto-link by matching activity.from.aadObjectId. NB: `oid` (directory
+    // object id), NOT `sub` (which is app/user-pairwise and won't match).
+    acc[provider].mapProfileToUser = (profile) =>
+      typeof profile.oid === "string" ? { entraObjectId: profile.oid } : {};
   }
   // Add Google domain hint if allowed domains is configured
   if (

@@ -9,11 +9,13 @@ import * as cardRepo from "@kan/db/repository/card.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
 import * as notificationRepo from "@kan/db/repository/notification.repo";
 import * as notificationRuleRepo from "@kan/db/repository/notificationRule.repo";
+import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import type { Templates } from "@kan/email";
 import { sendEmail } from "@kan/email";
 import { createEmailUnsubscribeLink, parseMentionsFromHTML } from "@kan/shared/utils";
+import { buildNotificationCard, isTeamsEnabled, sendProactiveCard } from "@kan/teams";
 
 /**
  * Effective default when no rule row exists. Events that already send email
@@ -34,6 +36,26 @@ export const EVENT_DEFAULT_ENABLED: Record<NotificationEventType, boolean> = {
   "workspace.member.removed": false,
   "workspace.role.changed": false,
 };
+
+/**
+ * Effective Teams-channel default when no rule row exists. Teams is opt-in for
+ * every event — admins enable it per event in the notification rules.
+ */
+export const EVENT_DEFAULT_TEAMS_ENABLED: Record<NotificationEventType, boolean> =
+  {
+    mention: false,
+    "workspace.member.added": false,
+    "board.access.granted": false,
+    "card.created": false,
+    "card.updated": false,
+    "card.moved": false,
+    "card.deleted": false,
+    "card.comment.added": false,
+    "card.member.added": false,
+    "card.member.removed": false,
+    "workspace.member.removed": false,
+    "workspace.role.changed": false,
+  };
 
 const TEMPLATE_FOR: Record<NotificationEventType, Templates> = {
   mention: "MENTION",
@@ -153,15 +175,27 @@ export async function resolveRule(
   db: dbClient,
   workspaceId: number,
   event: NotificationEventType,
-): Promise<{ enabled: boolean; customSubject: string | null }> {
+): Promise<{
+  emailEnabled: boolean;
+  teamsEnabled: boolean;
+  customSubject: string | null;
+}> {
   const resolved = await notificationRuleRepo.getResolvedRules(db, workspaceId);
   const rule = resolved.get(event);
 
   if (!rule) {
-    return { enabled: EVENT_DEFAULT_ENABLED[event], customSubject: null };
+    return {
+      emailEnabled: EVENT_DEFAULT_ENABLED[event],
+      teamsEnabled: EVENT_DEFAULT_TEAMS_ENABLED[event],
+      customSubject: null,
+    };
   }
 
-  return { enabled: rule.enabled, customSubject: rule.customSubject };
+  return {
+    emailEnabled: rule.enabled,
+    teamsEnabled: rule.teamsEnabled,
+    customSubject: rule.customSubject,
+  };
 }
 
 async function resolveUserRecipient(
@@ -180,6 +214,36 @@ async function resolveUserRecipient(
 async function getActorName(db: dbClient, actorUserId: string): Promise<string> {
   const actor = await userRepo.getById(db, actorUserId);
   return actor?.name?.trim() || actor?.email || "Someone";
+}
+
+/**
+ * Maps the per-event email `data` to an Adaptive Card. The subject doubles as
+ * the card heading; the body prefers the richest available detail and the CTA
+ * deep-links to the card / board / workspace.
+ */
+function buildCardContent(subject: string, data: Record<string, string>) {
+  const body =
+    data.commentExcerpt ||
+    data.changeSummary ||
+    (data.cardTitle && data.boardName
+      ? `${data.cardTitle} — ${data.boardName}`
+      : data.cardTitle || data.workspaceName || data.boardName || subject);
+
+  if (data.cardUrl) {
+    return { heading: subject, body, ctaUrl: data.cardUrl, ctaLabel: "Open card" };
+  }
+  if (data.boardUrl) {
+    return { heading: subject, body, ctaUrl: data.boardUrl, ctaLabel: "Open board" };
+  }
+  if (data.ctaUrl) {
+    return {
+      heading: subject,
+      body,
+      ctaUrl: data.ctaUrl,
+      ctaLabel: data.ctaLabel || "Open",
+    };
+  }
+  return { heading: subject, body };
 }
 
 /** Loads a card's board/workspace context plus its assigned-member recipients. */
@@ -476,7 +540,8 @@ export async function dispatchNotification(
     if (recipients.length === 0) return;
 
     const rule = await resolveRule(db, ctx.workspaceId, args.event);
-    if (!rule.enabled) {
+    const teamsActive = rule.teamsEnabled && isTeamsEnabled();
+    if (!rule.emailEnabled && !teamsActive) {
       log.debug({ event: args.event, workspaceId: ctx.workspaceId }, "Notification disabled by rule");
       return;
     }
@@ -484,17 +549,21 @@ export async function dispatchNotification(
     const subject = rule.customSubject?.trim() || ctx.defaultSubject;
 
     log.info(
-      { event: args.event, recipientCount: recipients.length, workspaceId: ctx.workspaceId },
+      {
+        event: args.event,
+        recipientCount: recipients.length,
+        workspaceId: ctx.workspaceId,
+        email: rule.emailEnabled,
+        teams: teamsActive,
+      },
       "Dispatching notification",
     );
 
     await Promise.all(
       recipients.map(async (recipient) => {
         try {
-          if (await userRepo.isEmailUnsubscribed(db, recipient.userId)) {
-            return;
-          }
-
+          // Dedupe + the in-app ledger row apply to the notification as a
+          // whole (channel-agnostic).
           if (ctx.dedupe) {
             const alreadySent = await notificationRepo.exists(db, {
               userId: recipient.userId,
@@ -513,19 +582,52 @@ export async function dispatchNotification(
             workspaceId: ctx.cardId ? undefined : ctx.workspaceId,
           });
 
-          const unsubscribeUrl =
-            (await createEmailUnsubscribeLink(recipient.userId)) ?? "";
+          // Email channel — honours the global email-unsubscribe opt-out.
+          if (
+            rule.emailEnabled &&
+            !(await userRepo.isEmailUnsubscribed(db, recipient.userId))
+          ) {
+            try {
+              const unsubscribeUrl =
+                (await createEmailUnsubscribeLink(recipient.userId)) ?? "";
+              await sendEmail(recipient.email, subject, ctx.template, {
+                ...ctx.data,
+                unsubscribeUrl,
+              });
+              log.info({ event: args.event, email: recipient.email }, "Notification email sent");
+            } catch (error) {
+              log.error(
+                { err: error, event: args.event, email: recipient.email },
+                "Failed to send notification email",
+              );
+            }
+          }
 
-          await sendEmail(recipient.email, subject, ctx.template, {
-            ...ctx.data,
-            unsubscribeUrl,
-          });
-
-          log.info({ event: args.event, email: recipient.email }, "Notification email sent");
+          // Teams channel — opt-in per event, requires a linked conversation.
+          if (teamsActive) {
+            try {
+              const convo = await teamsConversationRepo.getByUserId(
+                db,
+                recipient.userId,
+              );
+              if (convo) {
+                const card = buildNotificationCard(
+                  buildCardContent(subject, ctx.data),
+                );
+                await sendProactiveCard(convo.conversationReference, card);
+                log.info({ event: args.event, userId: recipient.userId }, "Notification Teams card sent");
+              }
+            } catch (error) {
+              log.error(
+                { err: error, event: args.event, userId: recipient.userId },
+                "Failed to send Teams notification",
+              );
+            }
+          }
         } catch (error) {
           log.error(
-            { err: error, event: args.event, email: recipient.email },
-            "Failed to send notification email",
+            { err: error, event: args.event, userId: recipient.userId },
+            "Failed to dispatch notification to recipient",
           );
         }
       }),

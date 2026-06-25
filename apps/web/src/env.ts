@@ -41,6 +41,10 @@ export const env = createEnv({
     GITLAB_ISSUER: z.string().optional(),
     MICROSOFT_CLIENT_ID: z.string().optional(),
     MICROSOFT_CLIENT_SECRET: z.string().optional(),
+    // Microsoft Teams bot (notification channel)
+    MICROSOFT_BOT_ID: z.string().optional(),
+    MICROSOFT_BOT_PASSWORD: z.string().optional(),
+    MICROSOFT_BOT_TENANT_ID: z.string().optional(),
     TWITTER_CLIENT_ID: z.string().optional(),
     TWITTER_CLIENT_SECRET: z.string().optional(),
     KICK_CLIENT_ID: z.string().optional(),

@@ -54,24 +54,30 @@ export function NotificationRules() {
 
   const byEvent = new Map(data.map((rule) => [rule.eventType, rule]));
 
-  const toggle = (eventType: NotificationEventType, enabled: boolean) => {
-    const subject = subjects[eventType]?.trim();
+  const save = (
+    eventType: NotificationEventType,
+    patch: { enabled?: boolean; teamsEnabled?: boolean; customSubject?: string | null },
+  ) => {
+    const rule = byEvent.get(eventType);
+    const draft = subjects[eventType]?.trim();
     upsert.mutate({
       eventType,
-      enabled,
-      customSubject: subject ? subject : null,
+      enabled: patch.enabled ?? rule?.enabled ?? false,
+      teamsEnabled: patch.teamsEnabled ?? rule?.teamsEnabled ?? false,
+      customSubject:
+        patch.customSubject !== undefined
+          ? patch.customSubject
+          : draft
+            ? draft
+            : null,
     });
   };
 
-  const saveSubject = (eventType: NotificationEventType, enabled: boolean) => {
+  const saveSubject = (eventType: NotificationEventType) => {
     const draft = subjects[eventType]?.trim() ?? "";
     const original = byEvent.get(eventType)?.customSubject ?? "";
     if (draft === original) return;
-    upsert.mutate({
-      eventType,
-      enabled,
-      customSubject: draft ? draft : null,
-    });
+    save(eventType, { customSubject: draft ? draft : null });
   };
 
   return (
@@ -80,7 +86,7 @@ export function NotificationRules() {
 
       <div className="mb-6">
         <p className="text-sm text-light-900 dark:text-dark-900">
-          {t`Enable or disable email notifications for each event, and optionally override the subject line. These are the global defaults; individual workspaces can override them from the workspace's page.`}
+          {t`Enable email and/or Microsoft Teams notifications for each event, and optionally override the subject line. These are the global defaults; individual workspaces can override them from the workspace's page.`}
         </p>
       </div>
 
@@ -97,6 +103,7 @@ export function NotificationRules() {
                 ).map((meta) => {
                   const rule = byEvent.get(meta.eventType);
                   const enabled = rule?.enabled ?? false;
+                  const teamsEnabled = rule?.teamsEnabled ?? false;
                   return (
                     <li
                       key={meta.eventType}
@@ -110,7 +117,7 @@ export function NotificationRules() {
                           {i18n._(meta.description)}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-4">
                         <input
                           type="text"
                           value={subjects[meta.eventType] ?? ""}
@@ -120,16 +127,26 @@ export function NotificationRules() {
                               [meta.eventType]: e.target.value,
                             }))
                           }
-                          onBlur={() => saveSubject(meta.eventType, enabled)}
-                          disabled={!enabled}
+                          onBlur={() => saveSubject(meta.eventType)}
+                          disabled={!enabled && !teamsEnabled}
                           placeholder={t`Default subject`}
-                          className="w-full rounded-lg border-0 bg-light-50 py-2 px-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 disabled:opacity-50 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500 sm:w-64"
+                          className="w-full rounded-lg border-0 bg-light-50 py-2 px-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 disabled:opacity-50 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500 sm:w-56"
                         />
                         <Toggle
                           isChecked={enabled}
-                          onChange={() => toggle(meta.eventType, !enabled)}
-                          label={i18n._(meta.label)}
-                          showLabel={false}
+                          onChange={() =>
+                            save(meta.eventType, { enabled: !enabled })
+                          }
+                          label={t`Email`}
+                          labelPosition="after"
+                        />
+                        <Toggle
+                          isChecked={teamsEnabled}
+                          onChange={() =>
+                            save(meta.eventType, { teamsEnabled: !teamsEnabled })
+                          }
+                          label={t`Teams`}
+                          labelPosition="after"
                         />
                       </div>
                     </li>

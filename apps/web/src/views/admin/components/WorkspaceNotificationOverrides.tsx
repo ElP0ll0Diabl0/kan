@@ -3,6 +3,7 @@ import { useLingui } from "@lingui/react";
 import { useEffect, useState } from "react";
 
 import LoadingSpinner from "~/components/LoadingSpinner";
+import Toggle from "~/components/Toggle";
 import { usePopup } from "~/providers/popup";
 import { api } from "~/utils/api";
 import type { NotificationEventType } from "./notificationEvents";
@@ -68,31 +69,52 @@ export function WorkspaceNotificationOverrides({
 
   const byEvent = new Map(data.map((rule) => [rule.eventType, rule]));
 
-  const onSelect = (eventType: NotificationEventType, value: string) => {
-    if (value === "inherit") {
+  // Switching to "override" seeds the row from the current global config so the
+  // existing behaviour doesn't change until the admin flips a channel.
+  const onModeChange = (eventType: NotificationEventType, mode: string) => {
+    if (mode === "inherit") {
       remove.mutate({ workspacePublicId, eventType });
       return;
     }
+    const rule = byEvent.get(eventType);
     const draft = subjects[eventType]?.trim();
     upsert.mutate({
       workspacePublicId,
       eventType,
-      enabled: value === "enabled",
+      enabled: rule?.override?.enabled ?? rule?.global.enabled ?? false,
+      teamsEnabled:
+        rule?.override?.teamsEnabled ?? rule?.global.teamsEnabled ?? false,
       customSubject: draft ? draft : null,
+    });
+  };
+
+  const saveChannel = (
+    eventType: NotificationEventType,
+    patch: { enabled?: boolean; teamsEnabled?: boolean; customSubject?: string | null },
+  ) => {
+    const override = byEvent.get(eventType)?.override;
+    if (!override) return; // Only meaningful while an override row exists.
+    const draft = subjects[eventType]?.trim();
+    upsert.mutate({
+      workspacePublicId,
+      eventType,
+      enabled: patch.enabled ?? override.enabled,
+      teamsEnabled: patch.teamsEnabled ?? override.teamsEnabled,
+      customSubject:
+        patch.customSubject !== undefined
+          ? patch.customSubject
+          : draft
+            ? draft
+            : null,
     });
   };
 
   const saveSubject = (eventType: NotificationEventType) => {
     const override = byEvent.get(eventType)?.override;
-    if (!override) return; // No override row to attach the subject to.
+    if (!override) return;
     const draft = subjects[eventType]?.trim() ?? "";
     if (draft === (override.customSubject ?? "")) return;
-    upsert.mutate({
-      workspacePublicId,
-      eventType,
-      enabled: override.enabled,
-      customSubject: draft ? draft : null,
-    });
+    saveChannel(eventType, { customSubject: draft ? draft : null });
   };
 
   return (
@@ -109,14 +131,10 @@ export function WorkspaceNotificationOverrides({
               ).map((meta) => {
                 const rule = byEvent.get(meta.eventType);
                 const override = rule?.override ?? null;
-                const value = !override
-                  ? "inherit"
-                  : override.enabled
-                    ? "enabled"
-                    : "disabled";
-                const globalLabel = rule?.global.enabled
-                  ? t`Global: On`
-                  : t`Global: Off`;
+                const mode = override ? "override" : "inherit";
+                const globalLabel = `${t`Global`}: ${
+                  rule?.global.enabled ? t`Email` : t`—`
+                }${rule?.global.teamsEnabled ? ` · ${t`Teams`}` : ""}`;
                 return (
                   <li
                     key={meta.eventType}
@@ -131,30 +149,55 @@ export function WorkspaceNotificationOverrides({
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        value={subjects[meta.eventType] ?? ""}
-                        onChange={(e) =>
-                          setSubjects((prev) => ({
-                            ...prev,
-                            [meta.eventType]: e.target.value,
-                          }))
-                        }
-                        onBlur={() => saveSubject(meta.eventType)}
-                        disabled={value !== "enabled"}
-                        placeholder={t`Default subject`}
-                        className="w-full rounded-lg border-0 bg-light-50 py-2 px-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 disabled:opacity-50 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500 sm:w-56"
-                      />
+                      {override && (
+                        <input
+                          type="text"
+                          value={subjects[meta.eventType] ?? ""}
+                          onChange={(e) =>
+                            setSubjects((prev) => ({
+                              ...prev,
+                              [meta.eventType]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => saveSubject(meta.eventType)}
+                          disabled={!override.enabled && !override.teamsEnabled}
+                          placeholder={t`Default subject`}
+                          className="w-full rounded-lg border-0 bg-light-50 py-2 px-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 disabled:opacity-50 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500 sm:w-44"
+                        />
+                      )}
+                      {override && (
+                        <>
+                          <Toggle
+                            isChecked={override.enabled}
+                            onChange={() =>
+                              saveChannel(meta.eventType, {
+                                enabled: !override.enabled,
+                              })
+                            }
+                            label={t`Email`}
+                            labelPosition="after"
+                          />
+                          <Toggle
+                            isChecked={override.teamsEnabled}
+                            onChange={() =>
+                              saveChannel(meta.eventType, {
+                                teamsEnabled: !override.teamsEnabled,
+                              })
+                            }
+                            label={t`Teams`}
+                            labelPosition="after"
+                          />
+                        </>
+                      )}
                       <select
-                        value={value}
+                        value={mode}
                         onChange={(e) =>
-                          onSelect(meta.eventType, e.target.value)
+                          onModeChange(meta.eventType, e.target.value)
                         }
                         className="rounded-lg border-0 bg-light-50 py-2 pl-3 pr-8 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500"
                       >
                         <option value="inherit">{t`Use global`}</option>
-                        <option value="enabled">{t`Enabled`}</option>
-                        <option value="disabled">{t`Disabled`}</option>
+                        <option value="override">{t`Override`}</option>
                       </select>
                     </div>
                   </li>

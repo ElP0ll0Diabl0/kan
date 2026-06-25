@@ -3,6 +3,8 @@ import { env } from "next-runtime-env";
 import { z } from "zod";
 
 import * as integrationsRepo from "@kan/db/repository/integration.repo";
+import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
+import { isTeamsEnabled } from "@kan/teams";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -77,6 +79,45 @@ export const integrationRouter = createTRPCRouter({
     );
     return { connected };
   }),
+
+  // Whether the Teams bot is configured for the instance, and whether THIS
+  // user has connected it (a conversation reference exists).
+  getTeamsStatus: protectedProcedure
+    .output(z.object({ available: z.boolean(), connected: z.boolean() }))
+    .query(async ({ ctx }) => {
+      const user = ctx.user;
+
+      if (!user)
+        throw new TRPCError({
+          message: "User not authenticated",
+          code: "UNAUTHORIZED",
+        });
+
+      if (!isTeamsEnabled()) {
+        return { available: false, connected: false };
+      }
+
+      const conversation = await teamsConversationRepo.getByUserId(
+        ctx.db,
+        user.id,
+      );
+      return { available: true, connected: !!conversation };
+    }),
+
+  disconnectTeams: protectedProcedure
+    .output(z.object({ success: z.boolean() }))
+    .mutation(async ({ ctx }) => {
+      const user = ctx.user;
+
+      if (!user)
+        throw new TRPCError({
+          message: "User not authenticated",
+          code: "UNAUTHORIZED",
+        });
+
+      await teamsConversationRepo.deleteByUserId(ctx.db, user.id);
+      return { success: true };
+    }),
 
   providers: protectedProcedure
     .meta({
