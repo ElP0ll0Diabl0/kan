@@ -7,7 +7,7 @@ import * as checklistRepo from "@kan/db/repository/checklist.repo";
 import { stripHtml } from "@kan/shared/utils";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { assertPermission } from "../utils/permissions";
+import { assertBoardPermission } from "../utils/permissions";
 
 const checklistSchema = z.object({
   publicId: z.string().length(12),
@@ -58,7 +58,12 @@ export const checklistRouter = createTRPCRouter({
           message: `Card with public ID ${input.cardPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(ctx.db, userId, card.workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "card:edit",
+      );
 
       const newChecklist = await checklistRepo.create(ctx.db, {
         name: input.name,
@@ -116,10 +121,10 @@ export const checklistRouter = createTRPCRouter({
           message: `Checklist with public ID ${input.checklistPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        checklist.card.list.board.workspace.id,
+        checklist.card.list.board.publicId,
         "card:edit",
       );
 
@@ -176,10 +181,10 @@ export const checklistRouter = createTRPCRouter({
           message: `Checklist with public ID ${input.checklistPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        checklist.card.list.board.workspace.id,
+        checklist.card.list.board.publicId,
         "card:edit",
       );
 
@@ -247,10 +252,10 @@ export const checklistRouter = createTRPCRouter({
           message: `Checklist with public ID ${input.checklistPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        checklist.card.list.board.workspace.id,
+        checklist.card.list.board.publicId,
         "card:edit",
       );
 
@@ -314,10 +319,10 @@ export const checklistRouter = createTRPCRouter({
           message: `Checklist item with public ID ${input.checklistItemPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        item.checklist.card.list.board.workspace.id,
+        item.checklist.card.list.board.publicId,
         "card:edit",
       );
 
@@ -402,10 +407,10 @@ export const checklistRouter = createTRPCRouter({
           message: `Checklist item with public ID ${input.checklistItemPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        item.checklist.card.list.board.workspace.id,
+        item.checklist.card.list.board.publicId,
         "card:edit",
       );
 

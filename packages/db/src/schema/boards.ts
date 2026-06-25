@@ -17,7 +17,7 @@ import { imports } from "./imports";
 import { labels } from "./labels";
 import { lists } from "./lists";
 import { users } from "./users";
-import { workspaces } from "./workspaces";
+import { workspaceMembers, workspaces } from "./workspaces";
 
 export const boardVisibilityStatuses = ["private", "public"] as const;
 export type BoardVisibilityStatus = (typeof boardVisibilityStatuses)[number];
@@ -29,6 +29,23 @@ export const boardVisibilityEnum = pgEnum(
 export const boardTypes = ["regular", "template"] as const;
 export type BoardType = (typeof boardTypes)[number];
 export const boardTypeEnum = pgEnum("board_type", boardTypes);
+
+// Controls which workspace members can access a board. "workspace" (default)
+// means the existing workspace-wide permission model applies. "restricted"
+// means only explicit board members (and workspace admins) have access.
+export const boardAccessLevels = ["workspace", "restricted"] as const;
+export type BoardAccessLevel = (typeof boardAccessLevels)[number];
+export const boardAccessLevelEnum = pgEnum(
+  "board_access_level",
+  boardAccessLevels,
+);
+
+export const boardMemberRoles = ["viewer", "editor", "admin"] as const;
+export type BoardMemberRole = (typeof boardMemberRoles)[number];
+export const boardMemberRoleEnum = pgEnum(
+  "board_member_role",
+  boardMemberRoles,
+);
 
 export const boards = pgTable(
   "board",
@@ -54,6 +71,9 @@ export const boards = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     visibility: boardVisibilityEnum("visibility").notNull().default("private"),
+    accessLevel: boardAccessLevelEnum("accessLevel")
+      .notNull()
+      .default("workspace"),
     type: boardTypeEnum("type").notNull().default("regular"),
     isArchived: boolean("isArchived").notNull().default(false),
     sourceBoardId: bigint("sourceBoardId", { mode: "number" }),
@@ -71,6 +91,7 @@ export const boards = pgTable(
 
 export const boardsRelations = relations(boards, ({ one, many }) => ({
   userFavorites: many(userBoardFavorites),
+  members: many(boardMembers),
   createdBy: one(users, {
     fields: [boards.createdBy],
     references: [users.id],
@@ -111,5 +132,99 @@ export const userBoardFavorites = pgTable(
     pk: primaryKey({ columns: [table.userId, table.boardId] }),
     userIdx: index("user_board_favorite_user_idx").on(table.userId),
     boardIdx: index("user_board_favorite_board_idx").on(table.boardId),
+  }),
+);
+
+// Per-board access control list. Only consulted for boards with
+// accessLevel = "restricted"; see assertBoardPermission in the API layer.
+export const boardMembers = pgTable(
+  "board_members",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    publicId: varchar("publicId", { length: 12 }).notNull().unique(),
+    boardId: bigint("boardId", { mode: "number" })
+      .notNull()
+      .references(() => boards.id, { onDelete: "cascade" }),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: boardMemberRoleEnum("role").notNull().default("editor"),
+    createdBy: uuid("createdBy").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt"),
+    deletedAt: timestamp("deletedAt"),
+    deletedBy: uuid("deletedBy").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [
+    uniqueIndex("unique_board_member")
+      .on(table.boardId, table.userId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("board_members_board_idx").on(table.boardId),
+    index("board_members_user_idx").on(table.userId),
+  ],
+).enableRLS();
+
+export const boardMembersRelations = relations(boardMembers, ({ one }) => ({
+  board: one(boards, {
+    fields: [boardMembers.boardId],
+    references: [boards.id],
+    relationName: "boardMembersBoard",
+  }),
+  user: one(users, {
+    fields: [boardMembers.userId],
+    references: [users.id],
+    relationName: "boardMembersUser",
+  }),
+}));
+
+// Deferred board access for invited (not-yet-registered) members. When an
+// admin invites a user to a workspace and grants restricted-board access, the
+// board membership cannot be created yet because board_members.userId is NOT
+// NULL and the invitee has no account. The intended grants are parked here and
+// applied when the invite is accepted (see applyPendingBoardMembers in the
+// auth middleware hooks).
+export const pendingBoardMembers = pgTable(
+  "pending_board_members",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    publicId: varchar("publicId", { length: 12 }).notNull().unique(),
+    workspaceMemberId: bigint("workspaceMemberId", { mode: "number" })
+      .notNull()
+      .references(() => workspaceMembers.id, { onDelete: "cascade" }),
+    boardId: bigint("boardId", { mode: "number" })
+      .notNull()
+      .references(() => boards.id, { onDelete: "cascade" }),
+    role: boardMemberRoleEnum("role").notNull().default("editor"),
+    createdBy: uuid("createdBy").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("unique_pending_board_member").on(
+      table.workspaceMemberId,
+      table.boardId,
+    ),
+    index("pending_board_members_member_idx").on(table.workspaceMemberId),
+  ],
+).enableRLS();
+
+export const pendingBoardMembersRelations = relations(
+  pendingBoardMembers,
+  ({ one }) => ({
+    board: one(boards, {
+      fields: [pendingBoardMembers.boardId],
+      references: [boards.id],
+      relationName: "pendingBoardMembersBoard",
+    }),
+    member: one(workspaceMembers, {
+      fields: [pendingBoardMembers.workspaceMemberId],
+      references: [workspaceMembers.id],
+      relationName: "pendingBoardMembersMember",
+    }),
   }),
 );

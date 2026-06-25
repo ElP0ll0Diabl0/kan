@@ -19,8 +19,8 @@ import {
   activityItemSchema,
 } from "../schemas";
 import { mergeActivities } from "../utils/activities";
-import { sendMentionEmails } from "../utils/notifications";
-import { assertCanDelete, assertCanEdit, assertPermission } from "../utils/permissions";
+import { dispatchNotification, sendMentionEmails } from "../utils/notifications";
+import { assertBoardPermission } from "../utils/permissions";
 import { generateAttachmentUrl, generateAvatarUrl } from "@kan/shared/utils";
 import {
   createCardWebhookPayload,
@@ -71,7 +71,12 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(ctx.db, userId, list.workspaceId, "card:create");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        list.boardPublicId,
+        "card:create",
+      );
 
       const newCard = await cardRepo.create(ctx.db, {
         title: input.title,
@@ -179,6 +184,14 @@ export const cardRouter = createTRPCRouter({
         });
       }
 
+      dispatchNotification(ctx.db, {
+        event: "card.created",
+        actorUserId: userId,
+        cardPublicId: newCard.publicId,
+      }).catch((error) => {
+        console.error("Failed to dispatch card.created notification:", error);
+      });
+
       // Fire webhooks (non-blocking)
       sendWebhooksForWorkspace(
         ctx.db,
@@ -246,7 +259,12 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(ctx.db, userId, card.workspaceId, "comment:create");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "comment:create",
+      );
 
       const newComment = await cardCommentRepo.create(ctx.db, {
         comment: input.comment,
@@ -276,6 +294,20 @@ export const cardRouter = createTRPCRouter({
         commentId: newComment.id,
       }).catch((error) => {
         console.error("Failed to send mention emails:", error);
+      });
+
+      dispatchNotification(ctx.db, {
+        event: "card.comment.added",
+        actorUserId: userId,
+        cardPublicId: input.cardPublicId,
+        commentId: newComment.id,
+        commentExcerpt: input.comment
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 200),
+      }).catch((error) => {
+        console.error("Failed to dispatch card.comment.added notification:", error);
       });
 
       return newComment;
@@ -330,10 +362,10 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertCanEdit(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        card.workspaceId,
+        card.boardPublicId,
         "comment:edit",
         existingComment.createdBy,
       );
@@ -418,10 +450,10 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertCanDelete(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        card.workspaceId,
+        card.boardPublicId,
         "comment:delete",
         existingComment.createdBy,
       );
@@ -485,7 +517,12 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(ctx.db, userId, card.workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "card:edit",
+      );
 
       const label = await labelRepo.getByPublicId(ctx.db, input.labelPublicId);
 
@@ -577,7 +614,12 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(ctx.db, userId, card.workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "card:edit",
+      );
 
       const member = await workspaceRepo.getMemberByPublicId(
         ctx.db,
@@ -617,6 +659,15 @@ export const cardRouter = createTRPCRouter({
           createdBy: userId,
         });
 
+        dispatchNotification(ctx.db, {
+          event: "card.member.removed",
+          actorUserId: userId,
+          cardPublicId: input.cardPublicId,
+          targetWorkspaceMemberId: member.id,
+        }).catch((error) => {
+          console.error("Failed to dispatch card.member.removed notification:", error);
+        });
+
         return { newMember: false };
       }
 
@@ -634,6 +685,15 @@ export const cardRouter = createTRPCRouter({
         cardId: card.id,
         workspaceMemberId: member.id,
         createdBy: userId,
+      });
+
+      dispatchNotification(ctx.db, {
+        event: "card.member.added",
+        actorUserId: userId,
+        cardPublicId: input.cardPublicId,
+        targetWorkspaceMemberId: member.id,
+      }).catch((error) => {
+        console.error("Failed to dispatch card.member.added notification:", error);
       });
 
       return { newMember: true };
@@ -671,7 +731,12 @@ export const cardRouter = createTRPCRouter({
             code: "UNAUTHORIZED",
           });
 
-        await assertPermission(ctx.db, userId, card.workspaceId, "card:view");
+        await assertBoardPermission(
+          ctx.db,
+          userId,
+          card.boardPublicId,
+          "card:view",
+        );
       }
 
       const result = await cardRepo.getWithListAndMembersByPublicId(
@@ -751,6 +816,8 @@ export const cardRouter = createTRPCRouter({
         cardPublicId: z.string().min(12),
         limit: z.number().min(1).max(100).optional().default(10),
         cursor: z.string().datetime().optional(), // ISO datetime string
+        direction: z.enum(["forward", "backward"]).optional().default("forward"),
+        commentsOnly: z.boolean().optional().default(false),
       }),
     )
     .output(
@@ -781,7 +848,12 @@ export const cardRouter = createTRPCRouter({
             code: "UNAUTHORIZED",
           });
 
-        await assertPermission(ctx.db, userId, card.workspaceId, "card:view");
+        await assertBoardPermission(
+          ctx.db,
+          userId,
+          card.boardPublicId,
+          "card:view",
+        );
       }
 
       const cursor = input.cursor ? new Date(input.cursor) : undefined;
@@ -791,6 +863,8 @@ export const cardRouter = createTRPCRouter({
         {
           limit: input.limit,
           cursor,
+          direction: input.direction,
+          commentsOnly: input.commentsOnly,
         },
       );
 
@@ -876,10 +950,10 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertCanEdit(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        card.workspaceId,
+        card.boardPublicId,
         "card:edit",
         card.createdBy,
       );
@@ -1094,6 +1168,28 @@ export const cardRouter = createTRPCRouter({
         console.error("Webhook delivery failed:", error);
       });
 
+      // Notify assigned members of card lifecycle changes (opt-in rule).
+      if (Object.keys(webhookChanges).length > 0) {
+        const fieldLabels: Record<string, string> = {
+          title: "title",
+          description: "description",
+          dueDate: "due date",
+          listId: "list",
+        };
+        const changeSummary = `Updated: ${Object.keys(webhookChanges)
+          .map((key) => fieldLabels[key] ?? key)
+          .join(", ")}.`;
+
+        dispatchNotification(ctx.db, {
+          event: movedToNewList ? "card.moved" : "card.updated",
+          actorUserId: userId,
+          cardPublicId: input.cardPublicId,
+          changeSummary,
+        }).catch((error) => {
+          console.error("Failed to dispatch card update notification:", error);
+        });
+      }
+
       return result;
     }),
   delete: protectedProcedure
@@ -1133,16 +1229,35 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertCanDelete(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        card.workspaceId,
+        card.boardPublicId,
         "card:delete",
         card.createdBy,
       );
 
       // Fetch full card data before delete for webhook
       const fullCard = await cardRepo.getByPublicId(ctx.db, input.cardPublicId);
+
+      // Capture assigned members before the soft-delete so we can still notify
+      // them that the card was deleted.
+      const cardWithMembers = await cardRepo.getWithListAndMembersByPublicId(
+        ctx.db,
+        input.cardPublicId,
+      );
+      const deletedCardRecipients = (cardWithMembers?.members ?? [])
+        .map((m) => {
+          const recipientUserId = m.user?.id;
+          const email = m.email;
+          if (!recipientUserId || !email) return null;
+          return {
+            userId: recipientUserId,
+            email,
+            name: m.user?.name?.trim() || email,
+          };
+        })
+        .filter((r): r is { userId: string; email: string; name: string } => r !== null);
 
       const deletedAt = new Date();
 
@@ -1184,6 +1299,19 @@ export const cardRouter = createTRPCRouter({
           ),
         ).catch((error) => {
           console.error("Webhook delivery failed:", error);
+        });
+      }
+
+      if (fullCard && deletedCardRecipients.length > 0) {
+        dispatchNotification(ctx.db, {
+          event: "card.deleted",
+          actorUserId: userId,
+          workspaceId: card.workspaceId,
+          cardTitle: fullCard.title,
+          boardName: card.boardName,
+          recipients: deletedCardRecipients,
+        }).catch((error) => {
+          console.error("Failed to dispatch card.deleted notification:", error);
         });
       }
 
@@ -1236,11 +1364,11 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(
+      await assertBoardPermission(
         ctx.db,
         userId,
-        sourceCardMeta.workspaceId,
-        "card:create",
+        sourceCardMeta.boardPublicId,
+        "card:view",
       );
 
       const targetList = await listRepo.getWorkspaceAndListIdByListPublicId(
@@ -1259,6 +1387,13 @@ export const cardRouter = createTRPCRouter({
           message: `Target list must be in the same workspace`,
           code: "BAD_REQUEST",
         });
+
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        targetList.boardPublicId,
+        "card:create",
+      );
 
       const sourceCard = await cardRepo.getWithListAndMembersByPublicId(
         ctx.db,

@@ -1,0 +1,1 @@
+ALTER TABLE "notification_rule" ADD COLUMN "teamsEnabled" boolean DEFAULT false NOT NULL;

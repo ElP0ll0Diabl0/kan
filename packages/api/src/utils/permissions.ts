@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 
 import type { dbClient } from "@kan/db/client";
+import type { BoardMemberRole } from "@kan/db/schema";
+import * as boardRepo from "@kan/db/repository/board.repo";
+import * as boardMemberRepo from "@kan/db/repository/boardMember.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
 import * as permissionRepo from "@kan/db/repository/permission.repo";
 import type { Permission, Role } from "@kan/shared";
@@ -139,6 +142,18 @@ export async function getUserPermissions(
     role: member.role,
     roleId: member.roleId,
   };
+}
+
+/**
+ * Whether a user holds the legacy "admin" role in a workspace.
+ */
+export async function isWorkspaceAdmin(
+  db: dbClient,
+  userId: string,
+  workspaceId: number,
+): Promise<boolean> {
+  const member = await permissionRepo.getMemberWithRole(db, userId, workspaceId);
+  return member?.role === "admin";
 }
 
 /**
@@ -292,4 +307,153 @@ export async function assertCanEdit(
     message: `You do not have permission to edit this entity (${permission})`,
     code: "FORBIDDEN",
   });
+}
+
+// Permissions a board "editor" holds on a restricted board. A "viewer" gets
+// only the ":view" permissions; a board "admin" gets everything.
+const BOARD_EDITOR_PERMISSIONS: Permission[] = [
+  "board:view",
+  "board:edit",
+  "list:view",
+  "list:create",
+  "list:edit",
+  "list:delete",
+  "card:view",
+  "card:create",
+  "card:edit",
+  "card:delete",
+  "comment:view",
+  "comment:create",
+  "comment:edit",
+  "comment:delete",
+];
+
+function boardRoleAllows(
+  role: BoardMemberRole,
+  permission: Permission,
+): boolean {
+  if (role === "admin") return true;
+  if (permission.endsWith(":view")) return true;
+  if (role === "viewer") return false;
+  return BOARD_EDITOR_PERMISSIONS.includes(permission);
+}
+
+/**
+ * Board-aware permission assertion. For boards with accessLevel "workspace"
+ * this delegates to the existing workspace permission model (no behaviour
+ * change). For "restricted" boards, only workspace admins and explicit board
+ * members are allowed, gated by their board role.
+ *
+ * Pass `createdBy` to also allow the entity's creator (mirrors assertCanEdit /
+ * assertCanDelete); omit it for a plain permission check.
+ */
+export async function assertBoardPermission(
+  db: dbClient,
+  userId: string,
+  boardPublicId: string,
+  permission: Permission,
+  createdBy?: string | null,
+): Promise<void> {
+  const board = await boardRepo.getAccessByPublicId(db, boardPublicId);
+
+  if (!board) {
+    throw new TRPCError({ message: "Board not found", code: "NOT_FOUND" });
+  }
+
+  if (board.accessLevel === "workspace") {
+    if (createdBy !== undefined) {
+      const allowed =
+        (await hasPermission(db, userId, board.workspaceId, permission)) ||
+        (createdBy !== null && createdBy === userId);
+      if (!allowed) {
+        throw new TRPCError({
+          message: `You do not have permission to perform this action (${permission})`,
+          code: "FORBIDDEN",
+        });
+      }
+      return;
+    }
+    await assertPermission(db, userId, board.workspaceId, permission);
+    return;
+  }
+
+  // Restricted board: workspace admins and explicit board members only.
+  const member = await permissionRepo.getMemberWithRole(
+    db,
+    userId,
+    board.workspaceId,
+  );
+
+  if (!member) {
+    throw new TRPCError({
+      message: "You are not a member of this workspace",
+      code: "FORBIDDEN",
+    });
+  }
+
+  if (member.role === "admin") return;
+
+  const boardMember = await boardMemberRepo.getByBoardAndUser(
+    db,
+    board.id,
+    userId,
+  );
+
+  if (!boardMember) {
+    throw new TRPCError({
+      message: "You do not have access to this board",
+      code: "FORBIDDEN",
+    });
+  }
+
+  // The entity's creator may always act on it, as on workspace-access boards.
+  if (createdBy !== undefined && createdBy !== null && createdBy === userId) {
+    return;
+  }
+
+  if (!boardRoleAllows(boardMember.role, permission)) {
+    throw new TRPCError({
+      message: `You do not have permission to perform this action (${permission})`,
+      code: "FORBIDDEN",
+    });
+  }
+}
+
+/**
+ * Whether a user can manage a restricted board's access (its members and
+ * access level) — workspace admins and board admins.
+ */
+export async function assertCanManageBoardAccess(
+  db: dbClient,
+  userId: string,
+  boardId: number,
+  workspaceId: number,
+): Promise<void> {
+  const member = await permissionRepo.getMemberWithRole(
+    db,
+    userId,
+    workspaceId,
+  );
+
+  if (!member) {
+    throw new TRPCError({
+      message: "You are not a member of this workspace",
+      code: "FORBIDDEN",
+    });
+  }
+
+  if (member.role === "admin") return;
+
+  const boardMember = await boardMemberRepo.getByBoardAndUser(
+    db,
+    boardId,
+    userId,
+  );
+
+  if (boardMember?.role !== "admin") {
+    throw new TRPCError({
+      message: "You do not have permission to manage this board's access",
+      code: "FORBIDDEN",
+    });
+  }
 }

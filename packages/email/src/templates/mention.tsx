@@ -16,11 +16,13 @@ export const MentionTemplate = ({
   boardName,
   cardTitle,
   cardUrl,
+  unsubscribeUrl,
 }: {
   commenterName: string;
   boardName: string;
   cardTitle: string;
   cardUrl: string;
+  unsubscribeUrl?: string;
 }) => (
   <Html>
     <Head />
@@ -99,6 +101,19 @@ export const MentionTemplate = ({
           </Link>
           , the open source Trello alternative.
         </Text>
+        {unsubscribeUrl && (
+          <Text style={{ color: "#7e7e7e", fontSize: "0.75rem" }}>
+            Don't want these emails?{" "}
+            <Link
+              href={unsubscribeUrl}
+              target="_blank"
+              style={{ color: "#7e7e7e", textDecoration: "underline" }}
+            >
+              Unsubscribe
+            </Link>
+            .
+          </Text>
+        )}
       </Container>
     </Body>
   </Html>

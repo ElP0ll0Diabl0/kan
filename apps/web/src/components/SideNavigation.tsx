@@ -5,7 +5,7 @@ import { t } from "@lingui/core/macro";
 import { env } from "next-runtime-env";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { HiBolt } from "react-icons/hi2";
+import { HiBolt, HiOutlineShieldCheck } from "react-icons/hi2";
 import {
   TbLayoutSidebarLeftCollapse,
   TbLayoutSidebarLeftExpand,
@@ -41,6 +41,7 @@ interface UserType {
   displayName?: string | null | undefined;
   email?: string | null | undefined;
   image?: string | null | undefined;
+  isAdmin?: boolean;
 }
 
 export default function SideNavigation({
@@ -201,6 +202,36 @@ export default function SideNavigation({
                 />
               </li>
             ))}
+            {user.isAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  onClick={() => onCloseSideNav?.()}
+                  title={isCollapsed ? t`Admin` : undefined}
+                  className={twMerge(
+                    "group flex h-[34px] items-center rounded-md p-1.5 text-sm font-normal leading-6 hover:bg-light-200 hover:text-light-1000 dark:hover:bg-dark-200 dark:hover:text-dark-1000",
+                    isCollapsed ? "md:justify-center" : "justify-start",
+                    pathname.includes("/admin")
+                      ? "bg-light-200 text-light-1000 dark:bg-dark-200 dark:text-dark-1000"
+                      : "text-neutral-600 dark:bg-dark-100 dark:text-dark-900",
+                  )}
+                >
+                  <div
+                    className={twMerge(
+                      "flex items-center",
+                      isCollapsed
+                        ? "justify-start gap-x-3 md:justify-center md:gap-x-0"
+                        : "gap-x-3",
+                    )}
+                  >
+                    <HiOutlineShieldCheck className="h-5 w-5" />
+                    <span className={twMerge(isCollapsed && "md:hidden")}>
+                      {t`Admin`}
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            )}
           </ul>
         </div>
 

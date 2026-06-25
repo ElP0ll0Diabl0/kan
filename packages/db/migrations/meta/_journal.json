@@ -239,6 +239,62 @@
       "when": 1778617946519,
       "tag": "20260512203226_AddPartnerLicenseToSubscription",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779453002424,
+      "tag": "20260522123002_AddUserAdminFields",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779456246375,
+      "tag": "20260522132406_AddBoardAccessControl",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780650858042,
+      "tag": "20260605091418_AddUserProfileFields",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781688423935,
+      "tag": "20260617092703_AddPendingBoardMembers",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782378180037,
+      "tag": "20260625090300_AddNotificationRules",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1782388050090,
+      "tag": "20260625114730_AddEntraObjectId",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1782388413218,
+      "tag": "20260625115333_AddTeamsConversation",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1782388581717,
+      "tag": "20260625115621_AddTeamsChannelToRules",
+      "breakpoints": true
     }
   ]
 }

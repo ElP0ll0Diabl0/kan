@@ -56,6 +56,15 @@ export const initAuth = (db: dbClient) => {
           defaultValue: null,
           input: false,
         },
+        // Entra ID directory object id (the `oid` claim), captured at
+        // Microsoft/OIDC sign-in. Used to auto-link a Teams identity
+        // (activity.from.aadObjectId) to the Kan user.
+        entraObjectId: {
+          type: "string",
+          required: false,
+          defaultValue: null,
+          input: false,
+        },
       },
     },
     plugins: createPlugins(db),

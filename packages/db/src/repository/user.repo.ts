@@ -2,7 +2,7 @@ import { and, count, desc, eq, isNotNull } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 import type { dbClient } from "@kan/db/client";
-import { account, apikey, users } from "@kan/db/schema";
+import { account, apikey, session, users } from "@kan/db/schema";
 
 const PROVIDER_CREDENTIAL = "credential";
 const PROVIDER_MAGIC_LINK = "magic-link";
@@ -22,6 +22,7 @@ export const getById = async (db: dbClient, userId: string) => {
         email: true,
         image: true,
         stripeCustomerId: true,
+        role: true,
       },
       with: {
         apiKeys: {
@@ -88,6 +89,18 @@ export const getByEmail = (db: dbClient, email: string) => {
   });
 };
 
+/** Looks up a user by their Entra directory object id (Teams bot linking). */
+export const getByEntraObjectId = (db: dbClient, entraObjectId: string) => {
+  return db.query.users.findFirst({
+    columns: {
+      id: true,
+      name: true,
+      email: true,
+    },
+    where: eq(users.entraObjectId, entraObjectId),
+  });
+};
+
 export const create = async (
   db: dbClient,
   user: { id?: string; email: string; stripeCustomerId?: string },
@@ -105,10 +118,78 @@ export const create = async (
   return result;
 };
 
+export const updateRole = async (
+  db: dbClient,
+  userId: string,
+  role: "user" | "admin",
+) => {
+  const [result] = await db
+    .update(users)
+    .set({ role })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, role: users.role });
+
+  return result;
+};
+
+export const setBanned = async (
+  db: dbClient,
+  userId: string,
+  args: { banned: boolean; banReason?: string | null; banExpires?: Date | null },
+) => {
+  const [result] = await db
+    .update(users)
+    .set({
+      banned: args.banned,
+      banReason: args.banned ? (args.banReason ?? null) : null,
+      banExpires: args.banned ? (args.banExpires ?? null) : null,
+    })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, banned: users.banned });
+
+  return result;
+};
+
+/** Deletes all of a user's sessions — used to force a ban to take effect. */
+export const clearSessions = async (db: dbClient, userId: string) => {
+  await db.delete(session).where(eq(session.userId, userId));
+};
+
+/** Whether the user has opted out of all notification emails. */
+export const isEmailUnsubscribed = async (db: dbClient, userId: string) => {
+  const user = await db.query.users.findFirst({
+    columns: { emailUnsubscribedAt: true },
+    where: eq(users.id, userId),
+  });
+
+  return !!user?.emailUnsubscribedAt;
+};
+
+/** Sets or clears the user's global email-unsubscribe flag. */
+export const setEmailUnsubscribed = async (
+  db: dbClient,
+  userId: string,
+  unsubscribed: boolean,
+) => {
+  const [result] = await db
+    .update(users)
+    .set({ emailUnsubscribedAt: unsubscribed ? new Date() : null })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, emailUnsubscribedAt: users.emailUnsubscribedAt });
+
+  return result;
+};
+
 export const update = async (
   db: dbClient,
   userId: string,
-  updates: { image?: string; name?: string; stripeCustomerId?: string },
+  updates: {
+    image?: string;
+    name?: string;
+    stripeCustomerId?: string;
+    department?: string | null;
+    title?: string | null;
+  },
 ) => {
   const [result] = await db
     .update(users)
@@ -116,12 +197,16 @@ export const update = async (
       name: updates.name,
       image: updates.image,
       stripeCustomerId: updates.stripeCustomerId,
+      department: updates.department,
+      title: updates.title,
     })
     .where(eq(users.id, userId))
     .returning({
       name: users.name,
       image: users.image,
       stripeCustomerId: users.stripeCustomerId,
+      department: users.department,
+      title: users.title,
     });
 
   return result;

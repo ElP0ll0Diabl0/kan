@@ -59,16 +59,39 @@ export default function IntegrationsSettings() {
   const { data: githubStatus, refetch: refetchGithubStatus } =
     api.integration.getGitHubStatus.useQuery();
 
+  const { data: teamsStatus, refetch: refetchTeamsStatus } =
+    api.integration.getTeamsStatus.useQuery();
+
   useEffect(() => {
     const handleFocus = () => {
       void refetchIntegrations();
       void refetchGithubStatus();
+      void refetchTeamsStatus();
     };
     window.addEventListener("focus", handleFocus);
     return () => {
       window.removeEventListener("focus", handleFocus);
     };
-  }, [refetchIntegrations, refetchGithubStatus]);
+  }, [refetchIntegrations, refetchGithubStatus, refetchTeamsStatus]);
+
+  const { mutateAsync: disconnectTeams } =
+    api.integration.disconnectTeams.useMutation({
+      onSuccess: () => {
+        void refetchTeamsStatus();
+        showPopup({
+          header: t`Teams disconnected`,
+          message: t`Microsoft Teams notifications have been disconnected.`,
+          icon: "success",
+        });
+      },
+      onError: () => {
+        showPopup({
+          header: t`Error disconnecting Teams`,
+          message: t`An error occurred while disconnecting Microsoft Teams.`,
+          icon: "error",
+        });
+      },
+    });
 
   const { mutateAsync: disconnectTrello } =
     api.integration.disconnect.useMutation({
@@ -225,6 +248,28 @@ export default function IntegrationsSettings() {
           </>
         )}
       </div>
+
+      {teamsStatus?.available && (
+        <div className="mb-8 border-t border-light-300 dark:border-dark-300">
+          <h2 className="mb-4 mt-8 text-[14px] font-bold text-neutral-900 dark:text-dark-1000">
+            {t`Microsoft Teams`}
+          </h2>
+          {!teamsStatus.connected ? (
+            <p className="mb-4 text-sm text-neutral-500 dark:text-dark-900">
+              {t`Add the Kan app in Microsoft Teams and send the bot a message to start receiving notifications there. You must be signed in to Kan with your Microsoft account.`}
+            </p>
+          ) : (
+            <>
+              <p className="mb-8 text-sm text-neutral-500 dark:text-dark-900">
+                {t`Microsoft Teams is connected. You'll receive enabled notifications in Teams.`}
+              </p>
+              <Button variant="secondary" onClick={() => disconnectTeams()}>
+                {t`Disconnect Teams`}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Global modals */}
       <Modal

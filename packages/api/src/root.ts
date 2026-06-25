@@ -1,3 +1,4 @@
+import { adminRouter } from "./routers/admin";
 import { attachmentRouter } from "./routers/attachment";
 import { boardRouter } from "./routers/board";
 import { cardRouter } from "./routers/card";
@@ -16,6 +17,7 @@ import { workspaceRouter } from "./routers/workspace";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
+  admin: adminRouter,
   attachment: attachmentRouter,
   board: boardRouter,
   card: cardRouter,

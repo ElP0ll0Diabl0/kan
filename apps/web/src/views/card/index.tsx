@@ -29,6 +29,7 @@ import ActivityList from "./components/ActivityList";
 import { AttachmentThumbnails } from "./components/AttachmentThumbnails";
 import { AttachmentUpload } from "./components/AttachmentUpload";
 import Checklists from "./components/Checklists";
+import CommentsList from "./components/CommentsList";
 import { DeleteCardConfirmation } from "./components/DeleteCardConfirmation";
 import { DeleteChecklistConfirmation } from "./components/DeleteChecklistConfirmation";
 import { DeleteCommentConfirmation } from "./components/DeleteCommentConfirmation";
@@ -179,6 +180,9 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
   const { data: session } = authClient.useSession();
   const [activeChecklistForm, setActiveChecklistForm] = useState<string | null>(
     null,
+  );
+  const [activeTab, setActiveTab] = useState<"comments" | "activity">(
+    "comments",
   );
 
   const cardId = Array.isArray(router.query.cardId)
@@ -464,23 +468,63 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
                     </>
                   )}
                   <div className="border-t-[1px] border-light-300 pt-12 dark:border-dark-300">
-                    <h2 className="text-md pb-4 font-medium text-light-1000 dark:text-dark-1000">
-                      {t`Activity`}
-                    </h2>
-                    <div>
-                      <ActivityList
-                        cardPublicId={cardId}
-                        isLoading={!card}
-                        isAdmin={workspace.role === "admin"}
-                      />
-                    </div>
-                    {!isTemplate && (
-                      <div className="mt-6">
-                        <NewCommentForm
+                    {isTemplate ? (
+                      <>
+                        <h2 className="text-md pb-4 font-medium text-light-1000 dark:text-dark-1000">
+                          {t`Activity`}
+                        </h2>
+                        <ActivityList
                           cardPublicId={cardId}
-                          workspaceMembers={editorWorkspaceMembers}
+                          isLoading={!card}
+                          isAdmin={workspace.role === "admin"}
+                          filter="activity"
                         />
-                      </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex border-b-[1px] border-light-300 dark:border-dark-300">
+                          {(
+                            [
+                              { key: "comments", label: t`Comments` },
+                              { key: "activity", label: t`Activity` },
+                            ] as const
+                          ).map((tab) => (
+                            <button
+                              key={tab.key}
+                              type="button"
+                              onClick={() => setActiveTab(tab.key)}
+                              className={`-mb-px flex-1 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors focus:outline-none ${
+                                activeTab === tab.key
+                                  ? "border-light-1000 text-light-1000 dark:border-dark-1000 dark:text-dark-1000"
+                                  : "border-transparent text-light-900 hover:border-light-950 hover:text-light-950 dark:text-dark-900 dark:hover:border-white/20 dark:hover:text-dark-950"
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+                        {activeTab === "comments" ? (
+                          <>
+                            <CommentsList
+                              cardPublicId={cardId}
+                              isLoading={!card}
+                            />
+                            <div className="mt-6">
+                              <NewCommentForm
+                                cardPublicId={cardId}
+                                workspaceMembers={editorWorkspaceMembers}
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <ActivityList
+                            cardPublicId={cardId}
+                            isLoading={!card}
+                            isAdmin={workspace.role === "admin"}
+                            filter="activity"
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                 </>

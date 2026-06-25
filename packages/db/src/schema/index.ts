@@ -14,4 +14,6 @@ export * from "./subscriptions";
 export * from "./workspaceInviteLinks";
 export * from "./permissions";
 export * from "./notifications";
+export * from "./notificationRules";
+export * from "./teamsConversations";
 export * from "./webhooks";

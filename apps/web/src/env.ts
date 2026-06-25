@@ -15,6 +15,7 @@ export const env = createEnv({
    */
   server: {
     KAN_ADMIN_API_KEY: z.string().optional(),
+    KAN_SUPERADMIN_EMAILS: z.string().optional(),
     BETTER_AUTH_SECRET: z.string(),
     BETTER_AUTH_TRUSTED_ORIGINS: z
       .string()
@@ -40,6 +41,10 @@ export const env = createEnv({
     GITLAB_ISSUER: z.string().optional(),
     MICROSOFT_CLIENT_ID: z.string().optional(),
     MICROSOFT_CLIENT_SECRET: z.string().optional(),
+    // Microsoft Teams bot (notification channel)
+    MICROSOFT_BOT_ID: z.string().optional(),
+    MICROSOFT_BOT_PASSWORD: z.string().optional(),
+    MICROSOFT_BOT_TENANT_ID: z.string().optional(),
     TWITTER_CLIENT_ID: z.string().optional(),
     TWITTER_CLIENT_SECRET: z.string().optional(),
     KICK_CLIENT_ID: z.string().optional(),

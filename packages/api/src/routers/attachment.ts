@@ -9,7 +9,7 @@ import { generateUID } from "@kan/shared/utils";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { attachmentConfirmResponseSchema } from "../schemas";
-import { assertPermission } from "../utils/permissions";
+import { assertBoardPermission } from "../utils/permissions";
 import { deleteObject, generateUploadUrl } from "@kan/shared/utils";
 
 export const attachmentRouter = createTRPCRouter({
@@ -56,7 +56,12 @@ export const attachmentRouter = createTRPCRouter({
           message: `Card with public ID ${input.cardPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(ctx.db, userId, card.workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "card:edit",
+      );
 
       // Get workspace publicId
       const workspace = await workspaceRepo.getById(ctx.db, card.workspaceId);
@@ -131,7 +136,12 @@ export const attachmentRouter = createTRPCRouter({
           message: `Card with public ID ${input.cardPublicId} not found`,
           code: "NOT_FOUND",
         });
-      await assertPermission(ctx.db, userId, card.workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        card.boardPublicId,
+        "card:edit",
+      );
 
       const attachment = await cardAttachmentRepo.create(ctx.db, {
         cardId: card.id,
@@ -193,8 +203,12 @@ export const attachmentRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      const workspaceId = attachment.card.list.board.workspaceId;
-      await assertPermission(ctx.db, userId, workspaceId, "card:edit");
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        attachment.card.list.board.publicId,
+        "card:edit",
+      );
 
       const bucket = process.env.NEXT_PUBLIC_ATTACHMENTS_BUCKET_NAME;
       if (bucket) {

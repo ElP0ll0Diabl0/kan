@@ -4,6 +4,7 @@ import {
   HiEllipsisHorizontal,
   HiLink,
   HiOutlineDocumentDuplicate,
+  HiOutlineLockClosed,
   HiOutlineTrash,
   HiOutlineStar,
   HiStar,
@@ -105,6 +106,13 @@ export default function BoardDropdown({
           label: t`Edit board URL`,
           action: () => openModal("UPDATE_BOARD_SLUG"),
           icon: <HiLink className="h-[16px] w-[16px] text-dark-900" />,
+        },
+        {
+          label: t`Manage access`,
+          action: () => openModal("BOARD_ACCESS"),
+          icon: (
+            <HiOutlineLockClosed className="h-[16px] w-[16px] text-dark-900" />
+          ),
         },
       ]
       : []),

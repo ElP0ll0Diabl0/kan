@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   pgTable,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -24,9 +25,24 @@ export const users = pgTable("user", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("emailVerified").notNull(),
   image: varchar("image", { length: 255 }),
+  // Optional org-profile fields, editable by instance admins.
+  department: varchar("department", { length: 255 }),
+  title: varchar("title", { length: 255 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   stripeCustomerId: varchar("stripeCustomerId", { length: 255 }),
+  // Instance-level role for the Better Auth admin plugin ("user" | "admin").
+  // "admin" designates an instance superadmin with access to the admin area.
+  role: varchar("role", { length: 32 }).notNull().default("user"),
+  banned: boolean("banned").notNull().default(false),
+  banReason: text("banReason"),
+  banExpires: timestamp("banExpires"),
+  // Set when the user opts out of all notification emails (DB-backed
+  // unsubscribe, honoured on self-hosted where Novu is not configured).
+  emailUnsubscribedAt: timestamp("emailUnsubscribedAt"),
+  // Entra ID directory object id (the `oid` claim) captured at Microsoft/OIDC
+  // sign-in. Used to auto-link a Teams identity to this user.
+  entraObjectId: varchar("entraObjectId", { length: 255 }),
 }).enableRLS();
 
 export const usersRelations = relations(users, ({ many }) => ({

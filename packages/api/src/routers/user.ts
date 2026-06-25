@@ -5,6 +5,7 @@ import * as userRepo from "@kan/db/repository/user.repo";
 import { generateAvatarUrl } from "@kan/shared/utils";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { isAdminAreaEnabled, isSuperAdmin } from "../utils/superAdmin";
 
 export const userRouter = createTRPCRouter({
   getUser: protectedProcedure
@@ -29,6 +30,8 @@ export const userRouter = createTRPCRouter({
         stripeCustomerId: z.string().nullable(),
         hasPassword: z.boolean(),
         hasMagicLinkAccount: z.boolean(),
+        role: z.string().nullable(),
+        isAdmin: z.boolean(),
         apiKey: z
           .object({
             id: z.number(),
@@ -60,11 +63,18 @@ export const userRouter = createTRPCRouter({
       // Generate presigned URL for avatar
       const imageUrl = await generateAvatarUrl(result.image);
 
+      // Whether this user can access the self-hosted admin area.
+      const isAdmin =
+        isAdminAreaEnabled() &&
+        isSuperAdmin({ email: result.email, role: result.role });
+
       return {
         ...result,
         image: imageUrl,
         hasPassword: result.hasPassword,
         hasMagicLinkAccount: result.hasMagicLinkAccount,
+        role: result.role,
+        isAdmin,
         apiKey: apiKey ? { id: apiKey.id, prefix: apiKey.prefix } : null,
       };
     }),
