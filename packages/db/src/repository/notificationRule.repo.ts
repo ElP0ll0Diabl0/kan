@@ -8,6 +8,7 @@ import { generateUID } from "@kan/shared/utils";
 export type ResolvedRule = {
   enabled: boolean;
   customSubject: string | null;
+  customBody: string | null;
   source: "workspace" | "global";
 };
 
@@ -38,6 +39,7 @@ export const getResolvedRules = async (
     resolved.set(row.eventType, {
       enabled: row.enabled,
       customSubject: row.customSubject,
+      customBody: row.customBody,
       source: isWorkspaceRow ? "workspace" : "global",
     });
   }
@@ -86,6 +88,7 @@ export const upsertRule = async (
     eventType: NotificationEventType;
     enabled: boolean;
     customSubject: string | null;
+    customBody: string | null;
     createdBy: string;
   },
 ) => {
@@ -106,6 +109,7 @@ export const upsertRule = async (
         .set({
           enabled: args.enabled,
           customSubject: args.customSubject,
+          customBody: args.customBody,
           updatedAt: new Date(),
         })
         .where(eq(notificationRules.id, existing.id))
@@ -122,6 +126,7 @@ export const upsertRule = async (
         eventType: args.eventType,
         enabled: args.enabled,
         customSubject: args.customSubject,
+        customBody: args.customBody,
         createdBy: args.createdBy,
       })
       .returning();

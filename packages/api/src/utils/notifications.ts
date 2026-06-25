@@ -15,6 +15,8 @@ import type { Templates } from "@kan/email";
 import { sendEmail } from "@kan/email";
 import { createEmailUnsubscribeLink, parseMentionsFromHTML } from "@kan/shared/utils";
 
+import { substituteTokens } from "./notificationPlaceholders";
+
 /**
  * Effective default when no rule row exists. Events that already send email
  * today (mention, added-to-workspace, board access) stay ON; brand-new events
@@ -153,15 +155,27 @@ export async function resolveRule(
   db: dbClient,
   workspaceId: number,
   event: NotificationEventType,
-): Promise<{ enabled: boolean; customSubject: string | null }> {
+): Promise<{
+  enabled: boolean;
+  customSubject: string | null;
+  customBody: string | null;
+}> {
   const resolved = await notificationRuleRepo.getResolvedRules(db, workspaceId);
   const rule = resolved.get(event);
 
   if (!rule) {
-    return { enabled: EVENT_DEFAULT_ENABLED[event], customSubject: null };
+    return {
+      enabled: EVENT_DEFAULT_ENABLED[event],
+      customSubject: null,
+      customBody: null,
+    };
   }
 
-  return { enabled: rule.enabled, customSubject: rule.customSubject };
+  return {
+    enabled: rule.enabled,
+    customSubject: rule.customSubject,
+    customBody: rule.customBody,
+  };
 }
 
 async function resolveUserRecipient(
@@ -481,7 +495,15 @@ export async function dispatchNotification(
       return;
     }
 
-    const subject = rule.customSubject?.trim() || ctx.defaultSubject;
+    // {{tokens}} in custom subject/body are substituted from the event's
+    // data object before delivery. customBody !=null switches the dispatch
+    // to the CUSTOM_CONTENT template so the admin's HTML is the body.
+    const subjectTemplate = rule.customSubject?.trim() || ctx.defaultSubject;
+    const subject = substituteTokens(subjectTemplate, ctx.data);
+    const useCustomBody = (rule.customBody?.trim().length ?? 0) > 0;
+    const customBodyHtml = useCustomBody
+      ? substituteTokens(rule.customBody ?? "", ctx.data)
+      : null;
 
     log.info(
       { event: args.event, recipientCount: recipients.length, workspaceId: ctx.workspaceId },
@@ -516,10 +538,18 @@ export async function dispatchNotification(
           const unsubscribeUrl =
             (await createEmailUnsubscribeLink(recipient.userId)) ?? "";
 
-          await sendEmail(recipient.email, subject, ctx.template, {
-            ...ctx.data,
-            unsubscribeUrl,
-          });
+          if (customBodyHtml !== null) {
+            await sendEmail(recipient.email, subject, "CUSTOM_CONTENT", {
+              heading: subject,
+              bodyHtml: customBodyHtml,
+              unsubscribeUrl,
+            });
+          } else {
+            await sendEmail(recipient.email, subject, ctx.template, {
+              ...ctx.data,
+              unsubscribeUrl,
+            });
+          }
 
           log.info({ event: args.event, email: recipient.email }, "Notification email sent");
         } catch (error) {

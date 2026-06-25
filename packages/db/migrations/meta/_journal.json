@@ -274,6 +274,13 @@
       "when": 1782378180037,
       "tag": "20260625090300_AddNotificationRules",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1782403200000,
+      "tag": "20260625120000_AddNotificationRuleCustomBody",
+      "breakpoints": true
     }
   ]
 }

@@ -440,6 +440,7 @@ export default function Editor({
   content,
   onChange,
   onBlur,
+  onEditorReady,
   readOnly = false,
   workspaceMembers,
   enableYouTubeEmbed = true,
@@ -449,6 +450,10 @@ export default function Editor({
   content: string | null;
   onChange?: (value: string) => void;
   onBlur?: () => void;
+  // Receives the underlying Tiptap editor once it's mounted, so consumers
+  // can drive imperative commands (e.g. insertContent at cursor) without
+  // forking the component. Called again with null on unmount.
+  onEditorReady?: (editor: TiptapEditor | null) => void;
   readOnly?: boolean;
   workspaceMembers: WorkspaceMember[];
   enableYouTubeEmbed?: boolean;
@@ -586,6 +591,15 @@ export default function Editor({
       editor.commands.setContent(safeContent, false);
     }
   }, [content, editor]);
+
+  // Expose the underlying Tiptap instance to consumers that need imperative
+  // control (e.g. inserting placeholder tokens at the cursor). Fires once
+  // after mount and once with null on unmount so consumers can clean up.
+  useEffect(() => {
+    if (!onEditorReady) return;
+    onEditorReady(editor ?? null);
+    return () => onEditorReady(null);
+  }, [editor, onEditorReady]);
 
   return (
     <div ref={containerRef}>

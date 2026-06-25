@@ -115,7 +115,15 @@ describe("resolveRule", () => {
   it("uses the resolved rule's enabled flag and custom subject", async () => {
     mockGetResolvedRules.mockResolvedValue(
       new Map([
-        ["mention", { enabled: false, customSubject: "Custom", source: "workspace" }],
+        [
+          "mention",
+          {
+            enabled: false,
+            customSubject: "Custom",
+            customBody: null,
+            source: "workspace",
+          },
+        ],
       ]),
     );
 
@@ -132,8 +140,20 @@ describe("getResolvedRules collapse (workspace overrides global)", () => {
     >("@kan/db/repository/notificationRule.repo");
 
     const rows = [
-      { eventType: "mention", enabled: false, customSubject: null, workspaceId: null },
-      { eventType: "mention", enabled: true, customSubject: "WS", workspaceId: 10 },
+      {
+        eventType: "mention",
+        enabled: false,
+        customSubject: null,
+        customBody: null,
+        workspaceId: null,
+      },
+      {
+        eventType: "mention",
+        enabled: true,
+        customSubject: "WS",
+        customBody: null,
+        workspaceId: 10,
+      },
     ];
 
     for (const ordered of [rows, [...rows].reverse()]) {
@@ -147,6 +167,7 @@ describe("getResolvedRules collapse (workspace overrides global)", () => {
       expect(resolved.get("mention")).toEqual({
         enabled: true,
         customSubject: "WS",
+        customBody: null,
         source: "workspace",
       });
     }
@@ -187,7 +208,12 @@ describe("dispatchNotification — mention", () => {
   it("does not send when the rule is disabled", async () => {
     setupMention([{ id: "user-1", email: "m1@test.com" }]);
     mockGetResolvedRules.mockResolvedValue(
-      new Map([["mention", { enabled: false, customSubject: null, source: "global" }]]),
+      new Map([
+        [
+          "mention",
+          { enabled: false, customSubject: null, customBody: null, source: "global" },
+        ],
+      ]),
     );
 
     await dispatchNotification(db, {
@@ -287,7 +313,10 @@ describe("dispatchNotification — card events", () => {
     );
     mockGetResolvedRules.mockResolvedValue(
       new Map([
-        ["card.comment.added", { enabled: true, customSubject: null, source: "global" }],
+        [
+          "card.comment.added",
+          { enabled: true, customSubject: null, customBody: null, source: "global" },
+        ],
       ]),
     );
 
@@ -316,7 +345,12 @@ describe("dispatchNotification — card events", () => {
       new Map([
         [
           "card.comment.added",
-          { enabled: true, customSubject: "Custom subject", source: "workspace" },
+          {
+            enabled: true,
+            customSubject: "Custom subject",
+            customBody: null,
+            source: "workspace",
+          },
         ],
       ]),
     );

@@ -68,17 +68,22 @@ export function WorkspaceNotificationOverrides({
 
   const byEvent = new Map(data.map((rule) => [rule.eventType, rule]));
 
+  // The inline controls only edit the override's enabled state + subject.
+  // Pass through customBody so a saved per-workspace body isn't wiped by a
+  // toggle / subject save (upsertRule is a full-row update, not a patch).
   const onSelect = (eventType: NotificationEventType, value: string) => {
     if (value === "inherit") {
       remove.mutate({ workspacePublicId, eventType });
       return;
     }
     const draft = subjects[eventType]?.trim();
+    const existingBody = byEvent.get(eventType)?.override?.customBody ?? null;
     upsert.mutate({
       workspacePublicId,
       eventType,
       enabled: value === "enabled",
       customSubject: draft ? draft : null,
+      customBody: existingBody,
     });
   };
 
@@ -92,6 +97,7 @@ export function WorkspaceNotificationOverrides({
       eventType,
       enabled: override.enabled,
       customSubject: draft ? draft : null,
+      customBody: override.customBody ?? null,
     });
   };
 

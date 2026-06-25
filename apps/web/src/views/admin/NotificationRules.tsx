@@ -1,6 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { HiOutlinePencilSquare } from "react-icons/hi2";
 
 import LoadingSpinner from "~/components/LoadingSpinner";
 import { PageHead } from "~/components/PageHead";
@@ -54,23 +56,31 @@ export function NotificationRules() {
 
   const byEvent = new Map(data.map((rule) => [rule.eventType, rule]));
 
+  // The inline controls (toggle + subject) edit only those two fields, so
+  // explicitly pass through the existing customBody to avoid wiping admin-
+  // authored bodies on every toggle / blur. The upsertRule repo write is a
+  // full-row update, not a partial patch.
   const toggle = (eventType: NotificationEventType, enabled: boolean) => {
     const subject = subjects[eventType]?.trim();
+    const existing = byEvent.get(eventType);
     upsert.mutate({
       eventType,
       enabled,
       customSubject: subject ? subject : null,
+      customBody: existing?.customBody ?? null,
     });
   };
 
   const saveSubject = (eventType: NotificationEventType, enabled: boolean) => {
     const draft = subjects[eventType]?.trim() ?? "";
-    const original = byEvent.get(eventType)?.customSubject ?? "";
+    const existing = byEvent.get(eventType);
+    const original = existing?.customSubject ?? "";
     if (draft === original) return;
     upsert.mutate({
       eventType,
       enabled,
       customSubject: draft ? draft : null,
+      customBody: existing?.customBody ?? null,
     });
   };
 
@@ -125,6 +135,13 @@ export function NotificationRules() {
                           placeholder={t`Default subject`}
                           className="w-full rounded-lg border-0 bg-light-50 py-2 px-3 text-sm text-light-1000 ring-1 ring-inset ring-light-300 focus:ring-2 focus:ring-inset focus:ring-light-400 disabled:opacity-50 dark:bg-dark-50 dark:text-dark-1000 dark:ring-dark-300 dark:focus:ring-dark-500 sm:w-64"
                         />
+                        <Link
+                          href={`/admin/notifications/${meta.eventType}`}
+                          aria-label={t`Edit ${i18n._(meta.label)}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-light-900 hover:bg-light-200 hover:text-light-1000 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000"
+                        >
+                          <HiOutlinePencilSquare />
+                        </Link>
                         <Toggle
                           isChecked={enabled}
                           onChange={() => toggle(meta.eventType, !enabled)}

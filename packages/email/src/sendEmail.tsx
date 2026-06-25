@@ -12,6 +12,7 @@ import CardCreatedTemplate from "./templates/card-created";
 import CardDeletedTemplate from "./templates/card-deleted";
 import CardUnassignedTemplate from "./templates/card-unassigned";
 import CardUpdatedTemplate from "./templates/card-updated";
+import CustomContentTemplate from "./templates/custom-content";
 import JoinWorkspaceTemplate from "./templates/join-workspace";
 import MagicLinkTemplate from "./templates/magic-link";
 import MentionTemplate from "./templates/mention";
@@ -33,7 +34,8 @@ export type Templates =
   | "CARD_DELETED"
   | "BOARD_ACCESS"
   | "WORKSPACE_MEMBER_REMOVED"
-  | "WORKSPACE_ROLE_CHANGED";
+  | "WORKSPACE_ROLE_CHANGED"
+  | "CUSTOM_CONTENT";
 
 const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   MAGIC_LINK: MagicLinkTemplate,
@@ -50,6 +52,7 @@ const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   BOARD_ACCESS: BoardAccessTemplate,
   WORKSPACE_MEMBER_REMOVED: WorkspaceMemberRemovedTemplate,
   WORKSPACE_ROLE_CHANGED: WorkspaceRoleChangedTemplate,
+  CUSTOM_CONTENT: CustomContentTemplate,
 };
 
 const transporter = nodemailer.createTransport({
