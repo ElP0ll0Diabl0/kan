@@ -267,6 +267,13 @@
       "when": 1781688423935,
       "tag": "20260617092703_AddPendingBoardMembers",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782378180037,
+      "tag": "20260625090300_AddNotificationRules",
+      "breakpoints": true
     }
   ]
 }

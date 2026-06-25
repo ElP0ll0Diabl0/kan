@@ -13,6 +13,7 @@ import { api } from "~/utils/api";
 import { getAvatarUrl } from "~/utils/helpers";
 import { AddMemberModal } from "./components/AddMemberModal";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { WorkspaceNotificationOverrides } from "./components/WorkspaceNotificationOverrides";
 
 type WorkspaceRole = "admin" | "member" | "guest";
 
@@ -312,6 +313,16 @@ export function WorkspaceDetail() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-10">
+        <h2 className="mb-1 text-sm font-semibold text-neutral-900 dark:text-dark-1000">
+          {t`Notifications`}
+        </h2>
+        <p className="mb-4 text-xs text-light-900 dark:text-dark-900">
+          {t`Override the global notification defaults for this workspace. "Use global" inherits the instance-wide setting.`}
+        </p>
+        <WorkspaceNotificationOverrides workspacePublicId={workspaceId} />
       </div>
 
       {removeTarget && (

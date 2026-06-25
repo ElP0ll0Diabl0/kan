@@ -12,7 +12,11 @@ import { HiChevronDown } from "react-icons/hi2";
 
 import Popup from "~/components/Popup";
 
-export type AdminTab = "overview" | "workspaces" | "members";
+export type AdminTab =
+  | "overview"
+  | "workspaces"
+  | "members"
+  | "notifications";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -27,6 +31,11 @@ export function AdminLayout({ children, currentTab }: AdminLayoutProps) {
     { key: "overview", label: t`Overview`, href: "/admin" },
     { key: "workspaces", label: t`Workspaces`, href: "/admin/workspaces" },
     { key: "members", label: t`Members`, href: "/admin/members" },
+    {
+      key: "notifications",
+      label: t`Notifications`,
+      href: "/admin/notifications",
+    },
   ];
 
   useEffect(() => {

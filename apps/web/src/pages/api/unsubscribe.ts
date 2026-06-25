@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import { withApiLogging } from "@kan/api/utils/apiLogging";
 import { withRateLimit } from "@kan/api/utils/rateLimit";
+import { createDrizzleClient } from "@kan/db/client";
+import * as userRepo from "@kan/db/repository/user.repo";
 
 import { env } from "~/env";
 
@@ -26,14 +28,6 @@ export default withRateLimit(
   { points: 100, duration: 60 },
   withApiLogging(
     async (req: NextApiRequest, res: NextApiResponse<ResponseData>) => {
-      if (process.env.NEXT_PUBLIC_KAN_ENV !== "cloud") {
-        return res.status(404).json({
-          success: false,
-          error: "Unsubscribe endpoint is not available.",
-          code: "UNAVAILABLE",
-        });
-      }
-
       if (req.method !== "POST") {
         res.setHeader("Allow", "POST");
         return res.status(405).json({
@@ -53,7 +47,7 @@ export default withRateLimit(
         });
       }
 
-      if (!env.EMAIL_UNSUBSCRIBE_SECRET || !env.NOVU_API_KEY) {
+      if (!env.EMAIL_UNSUBSCRIBE_SECRET) {
         return res.status(500).json({
           success: false,
           error: "Unsubscribe service is not configured.",
@@ -82,24 +76,37 @@ export default withRateLimit(
         });
       }
 
-      const novu = new Novu({ secretKey: env.NOVU_API_KEY });
-
+      // DB-backed opt-out — honoured by the notification dispatcher on every
+      // deployment (the admin notifications feature is self-hosted, where Novu
+      // is not configured).
       try {
-        await novu.subscribers.preferences.update(
-          {
-            channels: {
-              email: false,
-            },
-          },
-          payload.subscriberId,
-        );
-      } catch (error) {
-        return res.status(502).json({
+        const db = createDrizzleClient();
+        await userRepo.setEmailUnsubscribed(db, payload.subscriberId, true);
+      } catch {
+        return res.status(500).json({
           success: false,
           error:
             "We could not update your email preferences right now. Please try again later.",
-          code: "NOVU_ERROR",
+          code: "DB_ERROR",
         });
+      }
+
+      // On cloud, also mirror the opt-out to Novu (the channel that sends there).
+      if (process.env.NEXT_PUBLIC_KAN_ENV === "cloud" && env.NOVU_API_KEY) {
+        try {
+          const novu = new Novu({ secretKey: env.NOVU_API_KEY });
+          await novu.subscribers.preferences.update(
+            { channels: { email: false } },
+            payload.subscriberId,
+          );
+        } catch (error) {
+          return res.status(502).json({
+            success: false,
+            error:
+              "We could not update your email preferences right now. Please try again later.",
+            code: "NOVU_ERROR",
+          });
+        }
       }
 
       return res.status(200).json({ success: true });
