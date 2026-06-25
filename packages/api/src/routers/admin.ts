@@ -50,6 +50,18 @@ const customSubjectInput = z
   .nullish()
   .transform((value) => (value ? value : null));
 
+// Empty body clears the override (falls back to the built-in template).
+// Cap at 64KiB — comfortably above any reasonable email body, well below the
+// JSON request limits in front of the API.
+const customBodyInput = z
+  .string()
+  .max(65535)
+  .nullish()
+  .transform((value) => {
+    if (value === undefined || value === null) return null;
+    return value.trim().length > 0 ? value : null;
+  });
+
 // Empty strings from form inputs clear the field (stored as NULL).
 const optionalProfileField = z
   .string()
@@ -924,6 +936,7 @@ export const adminRouter = createTRPCRouter({
             ? rule.teamsEnabled
             : EVENT_DEFAULT_TEAMS_ENABLED[eventType],
           customSubject: rule?.customSubject ?? null,
+          customBody: rule?.customBody ?? null,
           hasRule: !!rule,
         };
       });
@@ -936,6 +949,7 @@ export const adminRouter = createTRPCRouter({
         enabled: z.boolean(),
         teamsEnabled: z.boolean(),
         customSubject: customSubjectInput,
+        customBody: customBodyInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -945,6 +959,7 @@ export const adminRouter = createTRPCRouter({
         enabled: input.enabled,
         teamsEnabled: input.teamsEnabled,
         customSubject: input.customSubject,
+        customBody: input.customBody,
         createdBy: ctx.user.id,
       });
 
@@ -988,12 +1003,14 @@ export const adminRouter = createTRPCRouter({
               ? globalRule.teamsEnabled
               : EVENT_DEFAULT_TEAMS_ENABLED[eventType],
             customSubject: globalRule?.customSubject ?? null,
+            customBody: globalRule?.customBody ?? null,
           },
           override: override
             ? {
                 enabled: override.enabled,
                 teamsEnabled: override.teamsEnabled,
                 customSubject: override.customSubject,
+                customBody: override.customBody,
               }
             : null,
         };
@@ -1008,6 +1025,7 @@ export const adminRouter = createTRPCRouter({
         enabled: z.boolean(),
         teamsEnabled: z.boolean(),
         customSubject: customSubjectInput,
+        customBody: customBodyInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1028,6 +1046,7 @@ export const adminRouter = createTRPCRouter({
         enabled: input.enabled,
         teamsEnabled: input.teamsEnabled,
         customSubject: input.customSubject,
+        customBody: input.customBody,
         createdBy: ctx.user.id,
       });
 

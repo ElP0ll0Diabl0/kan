@@ -17,6 +17,8 @@ import { sendEmail } from "@kan/email";
 import { createEmailUnsubscribeLink, parseMentionsFromHTML } from "@kan/shared/utils";
 import { buildNotificationCard, isTeamsEnabled, sendProactiveCard } from "@kan/teams";
 
+import { substituteTokens } from "./notificationPlaceholders";
+
 /**
  * Effective default when no rule row exists. Events that already send email
  * today (mention, added-to-workspace, board access) stay ON; brand-new events
@@ -179,6 +181,7 @@ export async function resolveRule(
   emailEnabled: boolean;
   teamsEnabled: boolean;
   customSubject: string | null;
+  customBody: string | null;
 }> {
   const resolved = await notificationRuleRepo.getResolvedRules(db, workspaceId);
   const rule = resolved.get(event);
@@ -188,6 +191,7 @@ export async function resolveRule(
       emailEnabled: EVENT_DEFAULT_ENABLED[event],
       teamsEnabled: EVENT_DEFAULT_TEAMS_ENABLED[event],
       customSubject: null,
+      customBody: null,
     };
   }
 
@@ -195,6 +199,7 @@ export async function resolveRule(
     emailEnabled: rule.enabled,
     teamsEnabled: rule.teamsEnabled,
     customSubject: rule.customSubject,
+    customBody: rule.customBody,
   };
 }
 
@@ -546,7 +551,18 @@ export async function dispatchNotification(
       return;
     }
 
-    const subject = rule.customSubject?.trim() || ctx.defaultSubject;
+    // {{tokens}} in custom subject/body are substituted from the event's
+    // data object before delivery. customBody !=null switches the dispatch
+    // to the CUSTOM_CONTENT template so the admin's HTML is the body.
+    //
+    // The subject substitution happens once (no per-recipient data in the
+    // subject). The body substitution defers to inside the recipient loop
+    // because we want {{unsubscribeUrl}} to resolve to a per-recipient JWT
+    // link, not the event-shared template.
+    const subjectTemplate = rule.customSubject?.trim() || ctx.defaultSubject;
+    const subject = substituteTokens(subjectTemplate, ctx.data);
+    const customBodyTemplate =
+      (rule.customBody?.trim().length ?? 0) > 0 ? rule.customBody : null;
 
     log.info(
       {
@@ -583,6 +599,7 @@ export async function dispatchNotification(
           });
 
           // Email channel — honours the global email-unsubscribe opt-out.
+          // A custom HTML body (when set) replaces the per-event template.
           if (
             rule.emailEnabled &&
             !(await userRepo.isEmailUnsubscribed(db, recipient.userId))
@@ -590,10 +607,24 @@ export async function dispatchNotification(
             try {
               const unsubscribeUrl =
                 (await createEmailUnsubscribeLink(recipient.userId)) ?? "";
-              await sendEmail(recipient.email, subject, ctx.template, {
-                ...ctx.data,
-                unsubscribeUrl,
-              });
+              if (customBodyTemplate !== null) {
+                // Substitute per-recipient (the only field that varies is
+                // unsubscribeUrl); other tokens already resolved from ctx.data.
+                const customBodyHtml = substituteTokens(customBodyTemplate, {
+                  ...ctx.data,
+                  unsubscribeUrl,
+                });
+                await sendEmail(recipient.email, subject, "CUSTOM_CONTENT", {
+                  heading: subject,
+                  bodyHtml: customBodyHtml,
+                  unsubscribeUrl,
+                });
+              } else {
+                await sendEmail(recipient.email, subject, ctx.template, {
+                  ...ctx.data,
+                  unsubscribeUrl,
+                });
+              }
               log.info({ event: args.event, email: recipient.email }, "Notification email sent");
             } catch (error) {
               log.error(
@@ -604,6 +635,7 @@ export async function dispatchNotification(
           }
 
           // Teams channel — opt-in per event, requires a linked conversation.
+          // (Custom HTML bodies are email-only; Teams uses the structured card.)
           if (teamsActive) {
             try {
               const convo = await teamsConversationRepo.getByUserId(

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS "teams_conversation" (
 );
 --> statement-breakpoint
 ALTER TABLE "teams_conversation" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "user" ADD COLUMN "entraObjectId" varchar(255);--> statement-breakpoint
+ALTER TABLE "notification_rule" ADD COLUMN "teamsEnabled" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "teams_conversation" ADD CONSTRAINT "teams_conversation_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION

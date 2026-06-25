@@ -9,6 +9,7 @@ export type ResolvedRule = {
   enabled: boolean;
   teamsEnabled: boolean;
   customSubject: string | null;
+  customBody: string | null;
   source: "workspace" | "global";
 };
 
@@ -40,6 +41,7 @@ export const getResolvedRules = async (
       enabled: row.enabled,
       teamsEnabled: row.teamsEnabled,
       customSubject: row.customSubject,
+      customBody: row.customBody,
       source: isWorkspaceRow ? "workspace" : "global",
     });
   }
@@ -89,6 +91,7 @@ export const upsertRule = async (
     enabled: boolean;
     teamsEnabled: boolean;
     customSubject: string | null;
+    customBody: string | null;
     createdBy: string;
   },
 ) => {
@@ -110,6 +113,7 @@ export const upsertRule = async (
           enabled: args.enabled,
           teamsEnabled: args.teamsEnabled,
           customSubject: args.customSubject,
+          customBody: args.customBody,
           updatedAt: new Date(),
         })
         .where(eq(notificationRules.id, existing.id))
@@ -127,6 +131,7 @@ export const upsertRule = async (
         enabled: args.enabled,
         teamsEnabled: args.teamsEnabled,
         customSubject: args.customSubject,
+        customBody: args.customBody,
         createdBy: args.createdBy,
       })
       .returning();

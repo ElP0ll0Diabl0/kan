@@ -2,11 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import * as cardRepo from "@kan/db/repository/card.repo";
-import * as cardActivityRepo from "@kan/db/repository/cardActivity.repo";
 import * as checklistRepo from "@kan/db/repository/checklist.repo";
 import { stripHtml } from "@kan/shared/utils";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createWithWebhook as createCardActivity } from "../utils/cardActivityHook";
 import { assertBoardPermission } from "../utils/permissions";
 
 const checklistSchema = z.object({
@@ -77,7 +77,7 @@ export const checklistRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.checklist.added",
         cardId: card.id,
         toTitle: newChecklist.name,
@@ -141,7 +141,7 @@ export const checklistRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.checklist.renamed",
         cardId: checklist.cardId,
         fromTitle: previousName,
@@ -206,7 +206,7 @@ export const checklistRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.checklist.deleted",
         cardId: checklist.cardId,
         fromTitle: checklist.name,
@@ -271,7 +271,7 @@ export const checklistRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.checklist.item.added",
         cardId: checklist.cardId,
         toTitle: newChecklistItem.title,
@@ -354,7 +354,7 @@ export const checklistRouter = createTRPCRouter({
 
       // Log completion toggle
       if (input.completed !== undefined) {
-        await cardActivityRepo.create(ctx.db, {
+        await createCardActivity(ctx.db, {
           type: input.completed
             ? "card.updated.checklist.item.completed"
             : "card.updated.checklist.item.uncompleted",
@@ -366,7 +366,7 @@ export const checklistRouter = createTRPCRouter({
 
       // Log title change
       if (input.title !== undefined && input.title !== previousTitle) {
-        await cardActivityRepo.create(ctx.db, {
+        await createCardActivity(ctx.db, {
           type: "card.updated.checklist.item.updated",
           cardId: item.checklist.cardId,
           fromTitle: previousTitle,
@@ -426,7 +426,7 @@ export const checklistRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
         });
 
-      await cardActivityRepo.create(ctx.db, {
+      await createCardActivity(ctx.db, {
         type: "card.updated.checklist.item.deleted",
         cardId: item.checklist.cardId,
         fromTitle: item.title,
