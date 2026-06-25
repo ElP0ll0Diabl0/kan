@@ -6,6 +6,7 @@ import {
   index,
   pgEnum,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -56,6 +57,10 @@ export const notificationRules = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     teamsEnabled: boolean("teamsEnabled").notNull().default(false),
     customSubject: varchar("customSubject", { length: 255 }),
+    // Custom HTML body (Tiptap output). When set, the dispatcher renders via
+    // the CUSTOM_CONTENT template instead of the per-event built-in template.
+    // {{tokens}} are substituted server-side from the event's data object.
+    customBody: text("customBody"),
     createdBy: uuid("createdBy")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),

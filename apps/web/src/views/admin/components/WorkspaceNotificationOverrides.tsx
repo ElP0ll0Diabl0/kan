@@ -70,7 +70,8 @@ export function WorkspaceNotificationOverrides({
   const byEvent = new Map(data.map((rule) => [rule.eventType, rule]));
 
   // Switching to "override" seeds the row from the current global config so the
-  // existing behaviour doesn't change until the admin flips a channel.
+  // existing behaviour doesn't change until the admin flips a channel. customBody
+  // is passed through so toggles/subject edits never wipe a per-workspace body.
   const onModeChange = (eventType: NotificationEventType, mode: string) => {
     if (mode === "inherit") {
       remove.mutate({ workspacePublicId, eventType });
@@ -78,6 +79,7 @@ export function WorkspaceNotificationOverrides({
     }
     const rule = byEvent.get(eventType);
     const draft = subjects[eventType]?.trim();
+    const existingBody = byEvent.get(eventType)?.override?.customBody ?? null;
     upsert.mutate({
       workspacePublicId,
       eventType,
@@ -85,6 +87,7 @@ export function WorkspaceNotificationOverrides({
       teamsEnabled:
         rule?.override?.teamsEnabled ?? rule?.global.teamsEnabled ?? false,
       customSubject: draft ? draft : null,
+      customBody: existingBody,
     });
   };
 
@@ -106,6 +109,7 @@ export function WorkspaceNotificationOverrides({
           : draft
             ? draft
             : null,
+      customBody: override.customBody ?? null,
     });
   };
 

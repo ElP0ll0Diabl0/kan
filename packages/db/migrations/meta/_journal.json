@@ -278,22 +278,15 @@
     {
       "idx": 39,
       "version": "7",
-      "when": 1782388050090,
-      "tag": "20260625114730_AddEntraObjectId",
+      "when": 1782403200000,
+      "tag": "20260625120000_AddNotificationRuleCustomBody",
       "breakpoints": true
     },
     {
       "idx": 40,
       "version": "7",
-      "when": 1782388413218,
-      "tag": "20260625115333_AddTeamsConversation",
-      "breakpoints": true
-    },
-    {
-      "idx": 41,
-      "version": "7",
-      "when": 1782388581717,
-      "tag": "20260625115621_AddTeamsChannelToRules",
+      "when": 1782414327657,
+      "tag": "20260625190527_AddTeamsSchema",
       "breakpoints": true
     }
   ]

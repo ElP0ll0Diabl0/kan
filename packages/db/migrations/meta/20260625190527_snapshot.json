@@ -1,6 +1,6 @@
 {
-  "id": "cef430a0-9246-4bdd-8181-72c5ebe888ad",
-  "prevId": "7533edfd-a2b3-4a79-83df-d0e02a523a03",
+  "id": "41566a54-46d3-4398-ba02-c80d7112a350",
+  "prevId": "ada43cde-9873-48b0-8d10-57e41e2c9311",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4143,6 +4143,12 @@
         "customSubject": {
           "name": "customSubject",
           "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "customBody": {
+          "name": "customBody",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
