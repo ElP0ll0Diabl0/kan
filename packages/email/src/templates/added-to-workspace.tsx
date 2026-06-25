@@ -17,12 +17,14 @@ export const AddedToWorkspaceTemplate = ({
   boards,
   ctaUrl,
   ctaLabel,
+  unsubscribeUrl,
 }: {
   workspaceName?: string;
   inviterName?: string;
   boards?: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  unsubscribeUrl?: string;
 }) => (
   <Html>
     <Head />
@@ -115,6 +117,19 @@ export const AddedToWorkspaceTemplate = ({
           </Link>
           , the open source Trello alternative.
         </Text>
+        {unsubscribeUrl && (
+          <Text style={{ color: "#7e7e7e", fontSize: "0.75rem" }}>
+            Don't want these emails?{" "}
+            <Link
+              href={unsubscribeUrl}
+              target="_blank"
+              style={{ color: "#7e7e7e", textDecoration: "underline" }}
+            >
+              Unsubscribe
+            </Link>
+            .
+          </Text>
+        )}
       </Container>
     </Body>
   </Html>

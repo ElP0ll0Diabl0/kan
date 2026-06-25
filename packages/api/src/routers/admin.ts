@@ -7,14 +7,19 @@ import * as boardRepo from "@kan/db/repository/board.repo";
 import * as boardMemberRepo from "@kan/db/repository/boardMember.repo";
 import * as cardRepo from "@kan/db/repository/card.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
+import * as notificationRuleRepo from "@kan/db/repository/notificationRule.repo";
 import * as pendingBoardMemberRepo from "@kan/db/repository/pendingBoardMember.repo";
 import * as permissionRepo from "@kan/db/repository/permission.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
-import { sendEmail } from "@kan/email";
+import { notificationEventTypes } from "@kan/db/schema";
 import { createLogger } from "@kan/logger";
 
 import { createTRPCRouter, superAdminProcedure } from "../trpc";
+import {
+  dispatchNotification,
+  EVENT_DEFAULT_ENABLED,
+} from "../utils/notifications";
 import { isSuperAdminEmail } from "../utils/superAdmin";
 
 const log = createLogger("admin");
@@ -31,6 +36,18 @@ const listInput = z.object({
 const workspaceRoleInput = z.enum(["admin", "member", "guest"]);
 
 const boardRoleInput = z.enum(["viewer", "editor", "admin"]);
+
+const notificationEventInput = z.enum(
+  notificationEventTypes as unknown as [string, ...string[]],
+);
+
+// Empty subject clears the override (falls back to the built-in default).
+const customSubjectInput = z
+  .string()
+  .trim()
+  .max(255)
+  .nullish()
+  .transform((value) => (value ? value : null));
 
 // Empty strings from form inputs clear the field (stored as NULL).
 const optionalProfileField = z
@@ -226,6 +243,23 @@ export const adminRouter = createTRPCRouter({
         status: "active",
       });
 
+      const baseUrl = env("NEXT_PUBLIC_BASE_URL");
+      dispatchNotification(ctx.db, {
+        event: "workspace.member.added",
+        actorUserId: ctx.user.id,
+        workspaceId: workspace.id,
+        targetUserId: user.id,
+        workspaceName: workspace.name,
+        inviterName: ctx.user.name ?? "",
+        ctaUrl: `${baseUrl}/${workspace.slug}`,
+        ctaLabel: "Open workspace",
+      }).catch((error) => {
+        log.error(
+          { err: error, userId: user.id },
+          "Failed to dispatch workspace.member.added notification",
+        );
+      });
+
       return { success: true };
     }),
 
@@ -385,29 +419,28 @@ export const adminRouter = createTRPCRouter({
         }
 
         // Notification is best-effort — the membership is the source of truth.
-        try {
-          const firstBoard = addedBoards[0];
-          const ctaUrl = firstBoard
-            ? `${baseUrl}/${workspace.slug}/${firstBoard.slug}`
-            : `${baseUrl}/${workspace.slug}`;
-          await sendEmail(
-            existingUser.email,
-            `You've been added to ${workspace.name}`,
-            "ADDED_TO_WORKSPACE",
-            {
-              workspaceName: workspace.name,
-              inviterName: ctx.user.name ?? "",
-              boards: addedBoards.map((board) => board.name).join(", "),
-              ctaUrl,
-              ctaLabel: firstBoard ? "Open board" : "Open workspace",
-            },
-          );
-        } catch (error) {
+        // Routed through the dispatcher so it obeys the admin's notification
+        // rules (workspace.member.added).
+        const firstBoard = addedBoards[0];
+        const ctaUrl = firstBoard
+          ? `${baseUrl}/${workspace.slug}/${firstBoard.slug}`
+          : `${baseUrl}/${workspace.slug}`;
+        dispatchNotification(ctx.db, {
+          event: "workspace.member.added",
+          actorUserId: ctx.user.id,
+          workspaceId: workspace.id,
+          targetUserId: existingUser.id,
+          workspaceName: workspace.name,
+          inviterName: ctx.user.name ?? "",
+          boards: addedBoards.map((board) => board.name).join(", "),
+          ctaUrl,
+          ctaLabel: firstBoard ? "Open board" : "Open workspace",
+        }).catch((error) => {
           log.error(
             { err: error, email: existingUser.email },
-            "Failed to send workspace-add notification email",
+            "Failed to dispatch workspace.member.added notification",
           );
-        }
+        });
 
         return { success: true, status: "active" as const };
       }
@@ -499,6 +532,22 @@ export const adminRouter = createTRPCRouter({
         deletedBy: ctx.user.id,
       });
 
+      if (member.userId) {
+        dispatchNotification(ctx.db, {
+          event: "workspace.member.removed",
+          actorUserId: ctx.user.id,
+          workspaceId: workspace.id,
+          targetUserId: member.userId,
+          workspaceName: workspace.name,
+          actorName: ctx.user.name ?? "",
+        }).catch((error) => {
+          log.error(
+            { err: error, memberId: member.id },
+            "Failed to dispatch workspace.member.removed notification",
+          );
+        });
+      }
+
       return { success: true };
     }),
 
@@ -541,6 +590,23 @@ export const adminRouter = createTRPCRouter({
         role: input.role,
         roleId: role?.id ?? null,
       });
+
+      if (member.userId) {
+        dispatchNotification(ctx.db, {
+          event: "workspace.role.changed",
+          actorUserId: ctx.user.id,
+          workspaceId: workspace.id,
+          targetUserId: member.userId,
+          workspaceName: workspace.name,
+          newRole: input.role,
+          actorName: ctx.user.name ?? "",
+        }).catch((error) => {
+          log.error(
+            { err: error, memberId: member.id },
+            "Failed to dispatch workspace.role.changed notification",
+          );
+        });
+      }
 
       return { success: true };
     }),
@@ -738,6 +804,23 @@ export const adminRouter = createTRPCRouter({
         createdBy: ctx.user.id,
       });
 
+      const [boardMeta] = await boardRepo.getAccessAndMetaByPublicIds(ctx.db, [
+        input.boardPublicId,
+      ]);
+      dispatchNotification(ctx.db, {
+        event: "board.access.granted",
+        actorUserId: ctx.user.id,
+        workspaceId: board.workspaceId,
+        targetUserId: input.userId,
+        boardName: boardMeta?.name ?? "a board",
+        actorName: ctx.user.name ?? "",
+      }).catch((error) => {
+        log.error(
+          { err: error, userId: input.userId },
+          "Failed to dispatch board.access.granted notification",
+        );
+      });
+
       return { success: true };
     }),
 
@@ -816,6 +899,149 @@ export const adminRouter = createTRPCRouter({
         boardMemberId: boardMember.id,
         deletedAt: new Date(),
         deletedBy: ctx.user.id,
+      });
+
+      return { success: true };
+    }),
+
+  // ── Notification rules ────────────────────────────────────────────────
+  // Global defaults: for every event in the catalog, return the effective
+  // enabled state (global rule if present, else the compiled default) plus any
+  // global custom subject.
+  listGlobalNotificationRules: superAdminProcedure
+    .input(z.void())
+    .query(async ({ ctx }) => {
+      const rules = await notificationRuleRepo.listGlobalRules(ctx.db);
+      const byEvent = new Map(rules.map((rule) => [rule.eventType, rule]));
+
+      return notificationEventTypes.map((eventType) => {
+        const rule = byEvent.get(eventType);
+        return {
+          eventType,
+          enabled: rule ? rule.enabled : EVENT_DEFAULT_ENABLED[eventType],
+          customSubject: rule?.customSubject ?? null,
+          hasRule: !!rule,
+        };
+      });
+    }),
+
+  upsertGlobalNotificationRule: superAdminProcedure
+    .input(
+      z.object({
+        eventType: notificationEventInput,
+        enabled: z.boolean(),
+        customSubject: customSubjectInput,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await notificationRuleRepo.upsertRule(ctx.db, {
+        workspaceId: null,
+        eventType: input.eventType as (typeof notificationEventTypes)[number],
+        enabled: input.enabled,
+        customSubject: input.customSubject,
+        createdBy: ctx.user.id,
+      });
+
+      return { success: true };
+    }),
+
+  // Per-workspace overrides: for every event return the global effective state
+  // plus the workspace override (if any). The view shows the override when
+  // present and otherwise inherits the global default.
+  getWorkspaceNotificationRules: superAdminProcedure
+    .input(z.object({ workspacePublicId: z.string().min(12) }))
+    .query(async ({ ctx, input }) => {
+      const workspace = await workspaceRepo.getByPublicId(
+        ctx.db,
+        input.workspacePublicId,
+      );
+      if (!workspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      const [globalRules, workspaceRules] = await Promise.all([
+        notificationRuleRepo.listGlobalRules(ctx.db),
+        notificationRuleRepo.listWorkspaceRules(ctx.db, workspace.id),
+      ]);
+      const globalByEvent = new Map(globalRules.map((r) => [r.eventType, r]));
+      const wsByEvent = new Map(workspaceRules.map((r) => [r.eventType, r]));
+
+      return notificationEventTypes.map((eventType) => {
+        const globalRule = globalByEvent.get(eventType);
+        const override = wsByEvent.get(eventType);
+        return {
+          eventType,
+          global: {
+            enabled: globalRule
+              ? globalRule.enabled
+              : EVENT_DEFAULT_ENABLED[eventType],
+            customSubject: globalRule?.customSubject ?? null,
+          },
+          override: override
+            ? { enabled: override.enabled, customSubject: override.customSubject }
+            : null,
+        };
+      });
+    }),
+
+  upsertWorkspaceNotificationRule: superAdminProcedure
+    .input(
+      z.object({
+        workspacePublicId: z.string().min(12),
+        eventType: notificationEventInput,
+        enabled: z.boolean(),
+        customSubject: customSubjectInput,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const workspace = await workspaceRepo.getByPublicId(
+        ctx.db,
+        input.workspacePublicId,
+      );
+      if (!workspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      await notificationRuleRepo.upsertRule(ctx.db, {
+        workspaceId: workspace.id,
+        eventType: input.eventType as (typeof notificationEventTypes)[number],
+        enabled: input.enabled,
+        customSubject: input.customSubject,
+        createdBy: ctx.user.id,
+      });
+
+      return { success: true };
+    }),
+
+  // Removes a workspace override so the event falls back to the global default.
+  deleteWorkspaceNotificationRule: superAdminProcedure
+    .input(
+      z.object({
+        workspacePublicId: z.string().min(12),
+        eventType: notificationEventInput,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const workspace = await workspaceRepo.getByPublicId(
+        ctx.db,
+        input.workspacePublicId,
+      );
+      if (!workspace) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Workspace not found",
+        });
+      }
+
+      await notificationRuleRepo.deleteWorkspaceRule(ctx.db, {
+        workspaceId: workspace.id,
+        eventType: input.eventType as (typeof notificationEventTypes)[number],
       });
 
       return { success: true };

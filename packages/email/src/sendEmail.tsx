@@ -5,17 +5,35 @@ import { createLogger } from "@kan/logger";
 const log = createLogger("email");
 
 import AddedToWorkspaceTemplate from "./templates/added-to-workspace";
+import BoardAccessTemplate from "./templates/board-access";
+import CardAssignedTemplate from "./templates/card-assigned";
+import CardCommentTemplate from "./templates/card-comment";
+import CardCreatedTemplate from "./templates/card-created";
+import CardDeletedTemplate from "./templates/card-deleted";
+import CardUnassignedTemplate from "./templates/card-unassigned";
+import CardUpdatedTemplate from "./templates/card-updated";
 import JoinWorkspaceTemplate from "./templates/join-workspace";
 import MagicLinkTemplate from "./templates/magic-link";
 import MentionTemplate from "./templates/mention";
 import ResetPasswordTemplate from "./templates/reset-password";
+import WorkspaceMemberRemovedTemplate from "./templates/workspace-member-removed";
+import WorkspaceRoleChangedTemplate from "./templates/workspace-role-changed";
 
-type Templates =
+export type Templates =
   | "MAGIC_LINK"
   | "JOIN_WORKSPACE"
   | "RESET_PASSWORD"
   | "MENTION"
-  | "ADDED_TO_WORKSPACE";
+  | "ADDED_TO_WORKSPACE"
+  | "CARD_CREATED"
+  | "CARD_UPDATED"
+  | "CARD_COMMENT"
+  | "CARD_ASSIGNED"
+  | "CARD_UNASSIGNED"
+  | "CARD_DELETED"
+  | "BOARD_ACCESS"
+  | "WORKSPACE_MEMBER_REMOVED"
+  | "WORKSPACE_ROLE_CHANGED";
 
 const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   MAGIC_LINK: MagicLinkTemplate,
@@ -23,6 +41,15 @@ const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   RESET_PASSWORD: ResetPasswordTemplate,
   MENTION: MentionTemplate,
   ADDED_TO_WORKSPACE: AddedToWorkspaceTemplate,
+  CARD_CREATED: CardCreatedTemplate,
+  CARD_UPDATED: CardUpdatedTemplate,
+  CARD_COMMENT: CardCommentTemplate,
+  CARD_ASSIGNED: CardAssignedTemplate,
+  CARD_UNASSIGNED: CardUnassignedTemplate,
+  CARD_DELETED: CardDeletedTemplate,
+  BOARD_ACCESS: BoardAccessTemplate,
+  WORKSPACE_MEMBER_REMOVED: WorkspaceMemberRemovedTemplate,
+  WORKSPACE_ROLE_CHANGED: WorkspaceRoleChangedTemplate,
 };
 
 const transporter = nodemailer.createTransport({

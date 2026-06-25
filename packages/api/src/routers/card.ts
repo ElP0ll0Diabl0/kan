@@ -23,7 +23,7 @@ import {
   bulkCreateWithWebhook as bulkCreateCardActivity,
   createWithWebhook as createCardActivity,
 } from "../utils/cardActivityHook";
-import { sendMentionEmails } from "../utils/notifications";
+import { dispatchNotification, sendMentionEmails } from "../utils/notifications";
 import { assertBoardPermission } from "../utils/permissions";
 import { generateAttachmentUrl, generateAvatarUrl } from "@kan/shared/utils";
 import {
@@ -188,6 +188,14 @@ export const cardRouter = createTRPCRouter({
         });
       }
 
+      dispatchNotification(ctx.db, {
+        event: "card.created",
+        actorUserId: userId,
+        cardPublicId: newCard.publicId,
+      }).catch((error) => {
+        console.error("Failed to dispatch card.created notification:", error);
+      });
+
       // Fire webhooks (non-blocking)
       sendWebhooksForWorkspace(
         ctx.db,
@@ -290,6 +298,20 @@ export const cardRouter = createTRPCRouter({
         commentId: newComment.id,
       }).catch((error) => {
         console.error("Failed to send mention emails:", error);
+      });
+
+      dispatchNotification(ctx.db, {
+        event: "card.comment.added",
+        actorUserId: userId,
+        cardPublicId: input.cardPublicId,
+        commentId: newComment.id,
+        commentExcerpt: input.comment
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 200),
+      }).catch((error) => {
+        console.error("Failed to dispatch card.comment.added notification:", error);
       });
 
       return newComment;
@@ -641,6 +663,15 @@ export const cardRouter = createTRPCRouter({
           createdBy: userId,
         });
 
+        dispatchNotification(ctx.db, {
+          event: "card.member.removed",
+          actorUserId: userId,
+          cardPublicId: input.cardPublicId,
+          targetWorkspaceMemberId: member.id,
+        }).catch((error) => {
+          console.error("Failed to dispatch card.member.removed notification:", error);
+        });
+
         return { newMember: false };
       }
 
@@ -658,6 +689,15 @@ export const cardRouter = createTRPCRouter({
         cardId: card.id,
         workspaceMemberId: member.id,
         createdBy: userId,
+      });
+
+      dispatchNotification(ctx.db, {
+        event: "card.member.added",
+        actorUserId: userId,
+        cardPublicId: input.cardPublicId,
+        targetWorkspaceMemberId: member.id,
+      }).catch((error) => {
+        console.error("Failed to dispatch card.member.added notification:", error);
       });
 
       return { newMember: true };
@@ -1132,6 +1172,28 @@ export const cardRouter = createTRPCRouter({
         console.error("Webhook delivery failed:", error);
       });
 
+      // Notify assigned members of card lifecycle changes (opt-in rule).
+      if (Object.keys(webhookChanges).length > 0) {
+        const fieldLabels: Record<string, string> = {
+          title: "title",
+          description: "description",
+          dueDate: "due date",
+          listId: "list",
+        };
+        const changeSummary = `Updated: ${Object.keys(webhookChanges)
+          .map((key) => fieldLabels[key] ?? key)
+          .join(", ")}.`;
+
+        dispatchNotification(ctx.db, {
+          event: movedToNewList ? "card.moved" : "card.updated",
+          actorUserId: userId,
+          cardPublicId: input.cardPublicId,
+          changeSummary,
+        }).catch((error) => {
+          console.error("Failed to dispatch card update notification:", error);
+        });
+      }
+
       return result;
     }),
   delete: protectedProcedure
@@ -1182,6 +1244,25 @@ export const cardRouter = createTRPCRouter({
       // Fetch full card data before delete for webhook
       const fullCard = await cardRepo.getByPublicId(ctx.db, input.cardPublicId);
 
+      // Capture assigned members before the soft-delete so we can still notify
+      // them that the card was deleted.
+      const cardWithMembers = await cardRepo.getWithListAndMembersByPublicId(
+        ctx.db,
+        input.cardPublicId,
+      );
+      const deletedCardRecipients = (cardWithMembers?.members ?? [])
+        .map((m) => {
+          const recipientUserId = m.user?.id;
+          const email = m.email;
+          if (!recipientUserId || !email) return null;
+          return {
+            userId: recipientUserId,
+            email,
+            name: m.user?.name?.trim() || email,
+          };
+        })
+        .filter((r): r is { userId: string; email: string; name: string } => r !== null);
+
       const deletedAt = new Date();
 
       await cardRepo.softDelete(ctx.db, {
@@ -1222,6 +1303,19 @@ export const cardRouter = createTRPCRouter({
           ),
         ).catch((error) => {
           console.error("Webhook delivery failed:", error);
+        });
+      }
+
+      if (fullCard && deletedCardRecipients.length > 0) {
+        dispatchNotification(ctx.db, {
+          event: "card.deleted",
+          actorUserId: userId,
+          workspaceId: card.workspaceId,
+          cardTitle: fullCard.title,
+          boardName: card.boardName,
+          recipients: deletedCardRecipients,
+        }).catch((error) => {
+          console.error("Failed to dispatch card.deleted notification:", error);
         });
       }
 

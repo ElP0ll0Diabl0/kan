@@ -37,6 +37,9 @@ export const users = pgTable("user", {
   banned: boolean("banned").notNull().default(false),
   banReason: text("banReason"),
   banExpires: timestamp("banExpires"),
+  // Set when the user opts out of all notification emails (DB-backed
+  // unsubscribe, honoured on self-hosted where Novu is not configured).
+  emailUnsubscribedAt: timestamp("emailUnsubscribedAt"),
 }).enableRLS();
 
 export const usersRelations = relations(users, ({ many }) => ({

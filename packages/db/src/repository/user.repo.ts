@@ -143,6 +143,31 @@ export const clearSessions = async (db: dbClient, userId: string) => {
   await db.delete(session).where(eq(session.userId, userId));
 };
 
+/** Whether the user has opted out of all notification emails. */
+export const isEmailUnsubscribed = async (db: dbClient, userId: string) => {
+  const user = await db.query.users.findFirst({
+    columns: { emailUnsubscribedAt: true },
+    where: eq(users.id, userId),
+  });
+
+  return !!user?.emailUnsubscribedAt;
+};
+
+/** Sets or clears the user's global email-unsubscribe flag. */
+export const setEmailUnsubscribed = async (
+  db: dbClient,
+  userId: string,
+  unsubscribed: boolean,
+) => {
+  const [result] = await db
+    .update(users)
+    .set({ emailUnsubscribedAt: unsubscribed ? new Date() : null })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, emailUnsubscribedAt: users.emailUnsubscribedAt });
+
+  return result;
+};
+
 export const update = async (
   db: dbClient,
   userId: string,
