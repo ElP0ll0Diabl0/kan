@@ -45,6 +45,19 @@ export const initAuth = (db: dbClient) => {
       },
     },
     socialProviders: configuredProviders,
+    account: {
+      // Entra/Microsoft does not return an `email_verified` claim, so better
+      // auth's default link gate (untrusted provider AND unverified profile
+      // email) blocks linking a Microsoft login to an existing same-email
+      // user. Trusting the provider lets the OAuth identity link onto the
+      // existing account. Safe here: linking is same-email-only
+      // (allowDifferentEmails stays false) and social sign-ups are already
+      // gated to the org's tenant-verified domain via BETTER_AUTH_ALLOWED_DOMAINS.
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["microsoft"],
+      },
+    },
     user: {
       deleteUser: {
         enabled: true,
