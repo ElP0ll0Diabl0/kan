@@ -5,6 +5,7 @@ import { TurnContext } from "botbuilder";
 import { createLogger } from "@kan/logger";
 
 import { getAdapter } from "./adapter";
+import type { BotConfig } from "./config";
 
 const log = createLogger("teams");
 
@@ -31,8 +32,9 @@ export const processBotRequest = async (
   req: IncomingMessage,
   res: ServerResponse,
   onConnect: OnConnect,
+  config: BotConfig,
 ): Promise<void> => {
-  const adapter = getAdapter();
+  const adapter = getAdapter(config);
 
   // botbuilder 4.23's CloudAdapter.process() validates the response object with
   // a Zod schema that requires an Express-style `.header()` method; Node's

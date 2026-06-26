@@ -4,9 +4,9 @@ import { z } from "zod";
 
 import * as integrationsRepo from "@kan/db/repository/integration.repo";
 import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
-import { isTeamsEnabled } from "@kan/teams";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { resolveBotConfig } from "../utils/teamsConfig";
 
 export const urls = {
   trello: "https://api.trello.com/1",
@@ -93,7 +93,8 @@ export const integrationRouter = createTRPCRouter({
           code: "UNAUTHORIZED",
         });
 
-      if (!isTeamsEnabled()) {
+      const botConfig = await resolveBotConfig(ctx.db);
+      if (!botConfig.enabled) {
         return { available: false, connected: false };
       }
 

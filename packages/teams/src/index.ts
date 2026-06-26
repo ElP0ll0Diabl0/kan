@@ -1,6 +1,7 @@
 export const name = "teams";
 
-export { isTeamsEnabled } from "./config";
+export { isTeamsEnabled, getBotConfig } from "./config";
+export type { BotConfig } from "./config";
 export { processBotRequest } from "./bot";
 export type { TeamsConnectInfo, OnConnect } from "./bot";
 export { sendProactiveCard } from "./proactive";
