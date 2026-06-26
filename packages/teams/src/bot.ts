@@ -34,9 +34,23 @@ export const processBotRequest = async (
 ): Promise<void> => {
   const adapter = getAdapter();
 
-  // Bot Framework's Request/Response types are structurally close to Node's
-  // http types but not assignable; the adapter reads/writes them as Node
-  // streams at runtime, so the cast is safe.
+  // botbuilder 4.23's CloudAdapter.process() validates the response object with
+  // a Zod schema that requires an Express-style `.header()` method; Node's
+  // ServerResponse (and Next's NextApiResponse) only expose `setHeader()`, so
+  // the parse throws and the request 500s before auth even runs. The method is
+  // never actually called when writing the reply (the adapter uses
+  // status/send/end), so a thin alias is enough to satisfy the check. The
+  // adapter also reads `req.body` as an already-parsed object, so the API route
+  // must leave Next's body parsing enabled (see api/teams/messages.ts).
+  const compatRes = res as ServerResponse & {
+    header?: (name: string, value: string) => unknown;
+  };
+  if (typeof compatRes.header !== "function") {
+    compatRes.header = (name, value) => res.setHeader(name, value);
+  }
+
+  // The Bot Framework Request/Response types are structurally close to Node's
+  // http types but not assignable, so cast at the call boundary.
   await adapter.process(req as unknown as Request, res as unknown as Response, async (context) => {
     const activity = context.activity;
 
