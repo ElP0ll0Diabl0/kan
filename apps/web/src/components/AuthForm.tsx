@@ -34,6 +34,7 @@ import { authClient } from "@kan/auth/client";
 import Button from "~/components/Button";
 import Input from "~/components/Input";
 import { usePopup } from "~/providers/popup";
+import { api } from "~/utils/api";
 
 type AuthProvider = SocialProvider | "oidc";
 
@@ -161,6 +162,9 @@ export function Auth({
   const [isCloudEnv, setIsCloudEnv] = useState(false);
   const [isLoginWithProviderPending, setIsLoginWithProviderPending] =
     useState<null | AuthProvider>(null);
+  const [pendingSsoProviderId, setPendingSsoProviderId] = useState<
+    string | null
+  >(null);
   const [isCredentialsEnabled, setIsCredentialsEnabled] = useState(false);
   const [isEmailSendingEnabled, setIsEmailSendingEnabled] = useState(false);
   const [isLoginWithEmailPending, setIsLoginWithEmailPending] = useState(false);
@@ -197,6 +201,9 @@ export function Auth({
     queryKey: ["social_providers"],
     queryFn: () => authClient.getSocialProviders(),
   });
+
+  // Admin-configured OIDC SSO connections (DB-backed, instance-level).
+  const { data: ssoConnections } = api.sso.listForLogin.useQuery();
 
   const handleLoginWithEmail = async (
     email: string,
@@ -298,6 +305,19 @@ export function Auth({
     }
   };
 
+  const handleLoginWithSso = async (providerId: string) => {
+    setPendingSsoProviderId(providerId);
+    setLoginError(null);
+
+    const result = await authClient.signIn.oauth2({ providerId, callbackURL });
+
+    setPendingSsoProviderId(null);
+
+    if (result.error) {
+      setLoginError(t`Failed to sign in. Please try again.`);
+    }
+  };
+
   const onSubmit = async (values: FormValues) => {
     // Treat empty password string as undefined to trigger magic link path
     const sanitizedPassword = values.password?.trim()
@@ -364,6 +384,22 @@ export function Auth({
               </Button>
             );
           })}
+        </div>
+      )}
+      {ssoConnections && ssoConnections.length > 0 && (
+        <div className="space-y-2">
+          {ssoConnections.map((conn) => (
+            <Button
+              key={conn.providerId}
+              onClick={() => handleLoginWithSso(conn.providerId)}
+              isLoading={pendingSsoProviderId === conn.providerId}
+              iconLeft={<FaOpenid />}
+              fullWidth
+              size="lg"
+            >
+              <Trans>Continue with {conn.name}</Trans>
+            </Button>
+          ))}
         </div>
       )}
       {!(isCredentialsEnabled || isMagicLinkAvailable) &&
