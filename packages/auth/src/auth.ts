@@ -7,10 +7,14 @@ import * as schema from "@kan/db/schema";
 import { sendEmail } from "@kan/email";
 
 import { createDatabaseHooks, createMiddlewareHooks } from "./hooks";
+import type { SsoOidcConfig } from "./plugins";
 import { createPlugins } from "./plugins";
 import { configuredProviders } from "./providers";
 
-export const initAuth = (db: dbClient) => {
+export const initAuth = (
+  db: dbClient,
+  options?: { ssoConnections?: SsoOidcConfig[] },
+) => {
   const baseURL = env("NEXT_PUBLIC_BASE_URL") || env("BETTER_AUTH_URL");
   const trustedOrigins =
     env("BETTER_AUTH_TRUSTED_ORIGINS")?.split(",").filter(Boolean) ?? [];
@@ -80,7 +84,7 @@ export const initAuth = (db: dbClient) => {
         },
       },
     },
-    plugins: createPlugins(db),
+    plugins: createPlugins(db, options?.ssoConnections),
     databaseHooks: createDatabaseHooks(db),
     hooks: createMiddlewareHooks(db),
     advanced: {

@@ -295,6 +295,13 @@
       "when": 1782476637471,
       "tag": "20260626122357_AddBotConfig",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1782727207695,
+      "tag": "20260629100007_AddSsoConnection",
+      "breakpoints": true
     }
   ]
 }

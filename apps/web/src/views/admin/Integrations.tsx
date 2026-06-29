@@ -2,6 +2,7 @@ import { t } from "@lingui/core/macro";
 import { useState } from "react";
 
 import { PageHead } from "~/components/PageHead";
+import { SsoIntegrationPanel } from "./integrations/SsoIntegrationPanel";
 import { TeamsIntegrationPanel } from "./integrations/TeamsIntegrationPanel";
 
 type IntegrationTab = "teams" | "sso" | "scim";
@@ -60,12 +61,7 @@ export function Integrations() {
       </div>
 
       {tab === "teams" && <TeamsIntegrationPanel />}
-      {tab === "sso" && (
-        <ComingSoon
-          title={t`Single sign-on (SSO)`}
-          description={t`OIDC and SAML 2.0 connections will be configurable here, with support for displaying tenant connections. Today, OIDC sign-in is configured via environment variables.`}
-        />
-      )}
+      {tab === "sso" && <SsoIntegrationPanel />}
       {tab === "scim" && (
         <ComingSoon
           title={t`SCIM provisioning`}

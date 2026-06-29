@@ -17,7 +17,84 @@ import { createStripeClient } from "@kan/stripe";
 import { socialProvidersPlugin } from "./providers";
 import { triggerWorkflow } from "./utils";
 
-export function createPlugins(db: dbClient) {
+export interface SsoOidcConfig {
+  providerId: string;
+  clientId: string;
+  clientSecret: string;
+  discoveryUrl: string;
+  scopes?: string[];
+}
+
+// Maps an OIDC profile to Kan user fields. Shared by the env-configured OIDC
+// provider and every DB-backed SSO connection.
+const oidcMapProfileToUser = (profile: {
+  name?: string;
+  display_name?: string;
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+  email?: string;
+  email_verified?: boolean;
+  sub?: string;
+  oid?: string;
+  picture?: string;
+  avatar?: string;
+}) => {
+  log.debug({ profile }, "OIDC profile received");
+
+  const name =
+    profile.name ??
+    profile.display_name ??
+    profile.preferred_username ??
+    (profile.given_name && profile.family_name
+      ? `${profile.given_name} ${profile.family_name}`.trim()
+      : (profile.given_name ?? profile.family_name)) ??
+    profile.sub ??
+    "";
+
+  return {
+    email: profile.email,
+    name: name,
+    emailVerified: profile.email_verified ?? false,
+    image: profile.picture ?? profile.avatar ?? null,
+    // Entra directory object id, for Teams bot auto-linking.
+    ...(profile.oid ? { entraObjectId: profile.oid } : {}),
+  };
+};
+
+export function createPlugins(
+  db: dbClient,
+  ssoConnections: SsoOidcConfig[] = [],
+) {
+  // genericOAuth config from the env-configured OIDC provider (if set) plus
+  // every admin-configured DB connection.
+  const oidcConfigs = [
+    ...(process.env.OIDC_CLIENT_ID &&
+    process.env.OIDC_CLIENT_SECRET &&
+    process.env.OIDC_DISCOVERY_URL
+      ? [
+          {
+            providerId: "oidc",
+            clientId: process.env.OIDC_CLIENT_ID,
+            clientSecret: process.env.OIDC_CLIENT_SECRET,
+            discoveryUrl: process.env.OIDC_DISCOVERY_URL,
+            scopes: ["openid", "email", "profile"],
+            pkce: true,
+            mapProfileToUser: oidcMapProfileToUser,
+          },
+        ]
+      : []),
+    ...ssoConnections.map((conn) => ({
+      providerId: conn.providerId,
+      clientId: conn.clientId,
+      clientSecret: conn.clientSecret,
+      discoveryUrl: conn.discoveryUrl,
+      scopes: conn.scopes ?? ["openid", "email", "profile"],
+      pkce: true,
+      mapProfileToUser: oidcMapProfileToUser,
+    })),
+  ];
+
   return [
     socialProvidersPlugin(),
     // Instance-level admin roles ("user" | "admin"). Used to gate the
@@ -250,58 +327,9 @@ export function createPlugins(db: dbClient) {
         }
       },
     }),
-    // Generic OIDC provider
-    ...(process.env.OIDC_CLIENT_ID &&
-    process.env.OIDC_CLIENT_SECRET &&
-    process.env.OIDC_DISCOVERY_URL
-      ? [
-          genericOAuth({
-            config: [
-              {
-                providerId: "oidc",
-                clientId: process.env.OIDC_CLIENT_ID,
-                clientSecret: process.env.OIDC_CLIENT_SECRET,
-                discoveryUrl: process.env.OIDC_DISCOVERY_URL,
-                scopes: ["openid", "email", "profile"],
-                pkce: true,
-                mapProfileToUser: (profile: {
-                  name?: string;
-                  display_name?: string;
-                  preferred_username?: string;
-                  given_name?: string;
-                  family_name?: string;
-                  email?: string;
-                  email_verified?: boolean;
-                  sub?: string;
-                  oid?: string;
-                  picture?: string;
-                  avatar?: string;
-                }) => {
-                  log.debug({ profile }, "OIDC profile received");
-
-                  const name =
-                    profile.name ??
-                    profile.display_name ??
-                    profile.preferred_username ??
-                    (profile.given_name && profile.family_name
-                      ? `${profile.given_name} ${profile.family_name}`.trim()
-                      : (profile.given_name ?? profile.family_name)) ??
-                    profile.sub ??
-                    "";
-
-                  return {
-                    email: profile.email,
-                    name: name,
-                    emailVerified: profile.email_verified ?? false,
-                    image: profile.picture ?? profile.avatar ?? null,
-                    // Entra directory object id, for Teams bot auto-linking.
-                    ...(profile.oid ? { entraObjectId: profile.oid } : {}),
-                  };
-                },
-              },
-            ],
-          }),
-        ]
+    // OIDC providers: env-configured plus admin-configured DB connections.
+    ...(oidcConfigs.length > 0
+      ? [genericOAuth({ config: oidcConfigs })]
       : []),
   ];
 }

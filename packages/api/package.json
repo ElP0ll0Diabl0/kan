@@ -40,6 +40,10 @@
       "types": "./src/utils/teamsConfig.ts",
       "default": "./src/utils/teamsConfig.ts"
     },
+    "./utils/ssoConfig": {
+      "types": "./src/utils/ssoConfig.ts",
+      "default": "./src/utils/ssoConfig.ts"
+    },
     "./utils/notificationPlaceholders": {
       "types": "./src/utils/notificationPlaceholders.ts",
       "default": "./src/utils/notificationPlaceholders.ts"
