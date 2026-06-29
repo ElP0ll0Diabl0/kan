@@ -16,7 +16,8 @@ export type AdminTab =
   | "overview"
   | "workspaces"
   | "members"
-  | "notifications";
+  | "notifications"
+  | "integrations";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -35,6 +36,11 @@ export function AdminLayout({ children, currentTab }: AdminLayoutProps) {
       key: "notifications",
       label: t`Notifications`,
       href: "/admin/notifications",
+    },
+    {
+      key: "integrations",
+      label: t`Integrations`,
+      href: "/admin/integrations",
     },
   ];
 

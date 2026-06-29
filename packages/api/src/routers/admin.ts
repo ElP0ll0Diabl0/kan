@@ -4,24 +4,28 @@ import { z } from "zod";
 
 import * as adminRepo from "@kan/db/repository/admin.repo";
 import * as boardRepo from "@kan/db/repository/board.repo";
+import * as botConfigRepo from "@kan/db/repository/botConfig.repo";
 import * as boardMemberRepo from "@kan/db/repository/boardMember.repo";
 import * as cardRepo from "@kan/db/repository/card.repo";
 import * as memberRepo from "@kan/db/repository/member.repo";
 import * as notificationRuleRepo from "@kan/db/repository/notificationRule.repo";
 import * as pendingBoardMemberRepo from "@kan/db/repository/pendingBoardMember.repo";
 import * as permissionRepo from "@kan/db/repository/permission.repo";
+import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import { notificationEventTypes } from "@kan/db/schema";
 import { createLogger } from "@kan/logger";
 
 import { createTRPCRouter, superAdminProcedure } from "../trpc";
+import { encryptToken } from "../utils/encryption";
 import {
   dispatchNotification,
   EVENT_DEFAULT_ENABLED,
   EVENT_DEFAULT_TEAMS_ENABLED,
 } from "../utils/notifications";
 import { isSuperAdminEmail } from "../utils/superAdmin";
+import { resolveBotConfig } from "../utils/teamsConfig";
 
 const log = createLogger("admin");
 
@@ -1079,5 +1083,103 @@ export const adminRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  // --- Integrations → Teams bot configuration (instance-level) ---------------
+
+  // Returns the effective bot config status. Never returns the secret; the UI
+  // shows whether a password is stored, not its value.
+  getTeamsConfig: superAdminProcedure
+    .input(z.void())
+    .output(
+      z.object({
+        source: z.enum(["db", "env", "none"]),
+        enabled: z.boolean(),
+        appId: z.string(),
+        tenantId: z.string().nullable(),
+        hasStoredPassword: z.boolean(),
+        isDbConfigured: z.boolean(),
+      }),
+    )
+    .query(async ({ ctx }) => {
+      const [resolved, row] = await Promise.all([
+        resolveBotConfig(ctx.db),
+        botConfigRepo.getConfig(ctx.db),
+      ]);
+
+      return {
+        source: resolved.source,
+        enabled: resolved.enabled,
+        appId: resolved.appId,
+        tenantId: resolved.tenantId ?? null,
+        hasStoredPassword: !!row?.appPassword,
+        isDbConfigured: !!(row?.appId && row.appPassword),
+      };
+    }),
+
+  // Upserts the instance-level bot config. Omit `appPassword` to keep the stored
+  // secret unchanged; the password is encrypted at rest.
+  updateTeamsConfig: superAdminProcedure
+    .input(
+      z.object({
+        appId: z.string().trim().max(255),
+        appPassword: z.string().min(1).optional(),
+        tenantId: z.string().trim().max(255).optional(),
+        enabled: z.boolean(),
+      }),
+    )
+    .output(z.object({ success: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await botConfigRepo.getConfig(ctx.db);
+      const willHavePassword =
+        input.appPassword !== undefined || !!existing?.appPassword;
+
+      // Can't turn the bot on without both an app id and a stored secret.
+      if (input.enabled && !(input.appId && willHavePassword)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "An app id and client secret are required to enable the Teams bot.",
+        });
+      }
+
+      await botConfigRepo.upsertConfig(ctx.db, {
+        appId: input.appId || null,
+        appPassword:
+          input.appPassword !== undefined
+            ? encryptToken(input.appPassword)
+            : undefined,
+        tenantId: input.tenantId?.trim() ? input.tenantId.trim() : null,
+        enabled: input.enabled,
+        updatedBy: ctx.user.id,
+      });
+
+      return { success: true };
+    }),
+
+  // Lists users who have linked the Teams bot (for the connections panel).
+  listTeamsConnections: superAdminProcedure
+    .input(z.void())
+    .output(
+      z.array(
+        z.object({
+          publicId: z.string(),
+          name: z.string().nullable(),
+          email: z.string(),
+          tenantId: z.string().nullable(),
+          connectedAt: z.date(),
+        }),
+      ),
+    )
+    .query(async ({ ctx }) => {
+      const connections = await teamsConversationRepo.listConnections(ctx.db);
+
+      return connections.map((c) => ({
+        publicId: c.publicId,
+        name: c.user?.name ?? null,
+        email: c.user?.email ?? "",
+        tenantId: c.tenantId,
+        connectedAt: c.createdAt,
+      }));
     }),
 });

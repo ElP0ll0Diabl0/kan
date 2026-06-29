@@ -16,6 +16,22 @@ export const getByAadObjectId = (db: dbClient, aadObjectId: string) => {
   });
 };
 
+/** Lists every linked Teams conversation with its user (for the admin view). */
+export const listConnections = (db: dbClient) => {
+  return db.query.teamsConversations.findMany({
+    columns: {
+      publicId: true,
+      tenantId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    with: {
+      user: { columns: { name: true, email: true } },
+    },
+    orderBy: (fields, { desc }) => [desc(fields.createdAt)],
+  });
+};
+
 /** Inserts or refreshes the conversation reference for a user (one per user). */
 export const upsertByUserId = async (
   db: dbClient,

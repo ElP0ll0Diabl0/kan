@@ -6,20 +6,29 @@ import {
 
 import { createLogger } from "@kan/logger";
 
-import { getBotConfig } from "./config";
+import type { BotConfig } from "./config";
 
 const log = createLogger("teams");
 
-let adapter: CloudAdapter | null = null;
+// The adapter is expensive to build, so it is cached and reused. The cache is
+// keyed on the resolved config so that a runtime config change (e.g. an admin
+// updating the bot credentials in the DB) transparently rebuilds the adapter on
+// the next request — no restart needed.
+let cached: { key: string; adapter: CloudAdapter } | null = null;
+
+const configKey = (config: BotConfig): string =>
+  `${config.appId}|${config.tenantId ?? ""}|${config.appPassword}`;
 
 /**
- * Lazily-constructed singleton CloudAdapter. The adapter validates the inbound
- * Bot Framework JWT itself and is also used for proactive (outbound) sends.
+ * Returns a CloudAdapter for the given bot config. The adapter validates the
+ * inbound Bot Framework JWT itself and is also used for proactive (outbound)
+ * sends. Cached per distinct config.
  */
-export const getAdapter = (): CloudAdapter => {
-  if (adapter) return adapter;
+export const getAdapter = (config: BotConfig): CloudAdapter => {
+  const key = configKey(config);
+  if (cached && cached.key === key) return cached.adapter;
 
-  const { appId, appPassword, tenantId } = getBotConfig();
+  const { appId, appPassword, tenantId } = config;
 
   const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
     MicrosoftAppId: appId,
@@ -40,6 +49,6 @@ export const getAdapter = (): CloudAdapter => {
     log.error({ err: error }, "Teams bot turn error");
   };
 
-  adapter = created;
+  cached = { key, adapter: created };
   return created;
 };

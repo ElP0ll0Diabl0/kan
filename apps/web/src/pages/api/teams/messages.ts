@@ -1,9 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
+import { resolveBotConfig } from "@kan/api/utils/teamsConfig";
 import { createDrizzleClient } from "@kan/db/client";
 import * as teamsConversationRepo from "@kan/db/repository/teamsConversation.repo";
 import * as userRepo from "@kan/db/repository/user.repo";
-import { isTeamsEnabled, processBotRequest } from "@kan/teams";
+import { processBotRequest } from "@kan/teams";
 
 // Bot Framework authenticates via the Authorization header (a signed JWT), not
 // a body signature, so Next's default body parsing is safe — and required:
@@ -19,13 +20,17 @@ export default async function handler(
     return res.status(405).end();
   }
 
-  if (!isTeamsEnabled()) {
+  const db = createDrizzleClient();
+  const botConfig = await resolveBotConfig(db);
+
+  if (!botConfig.enabled) {
     return res.status(404).end();
   }
 
-  const db = createDrizzleClient();
-
-  await processBotRequest(req, res, async (info) => {
+  await processBotRequest(
+    req,
+    res,
+    async (info) => {
     // Auto-link: match the Teams identity's Entra object id to a Kan user.
     if (!info.aadObjectId) return { linked: false };
 
@@ -40,6 +45,8 @@ export default async function handler(
       conversationReference: info.conversationReference,
     });
 
-    return { linked: true, displayName: user.name ?? undefined };
-  });
+      return { linked: true, displayName: user.name ?? undefined };
+    },
+    botConfig,
+  );
 }

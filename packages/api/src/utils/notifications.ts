@@ -15,7 +15,9 @@ import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import type { Templates } from "@kan/email";
 import { sendEmail } from "@kan/email";
 import { createEmailUnsubscribeLink, parseMentionsFromHTML } from "@kan/shared/utils";
-import { buildNotificationCard, isTeamsEnabled, sendProactiveCard } from "@kan/teams";
+import { buildNotificationCard, sendProactiveCard } from "@kan/teams";
+
+import { resolveBotConfig } from "./teamsConfig";
 
 import { substituteTokens } from "./notificationPlaceholders";
 
@@ -545,7 +547,8 @@ export async function dispatchNotification(
     if (recipients.length === 0) return;
 
     const rule = await resolveRule(db, ctx.workspaceId, args.event);
-    const teamsActive = rule.teamsEnabled && isTeamsEnabled();
+    const botConfig = await resolveBotConfig(db);
+    const teamsActive = rule.teamsEnabled && botConfig.enabled;
     if (!rule.emailEnabled && !teamsActive) {
       log.debug({ event: args.event, workspaceId: ctx.workspaceId }, "Notification disabled by rule");
       return;
@@ -646,7 +649,11 @@ export async function dispatchNotification(
                 const card = buildNotificationCard(
                   buildCardContent(subject, ctx.data),
                 );
-                await sendProactiveCard(convo.conversationReference, card);
+                await sendProactiveCard(
+                  convo.conversationReference,
+                  card,
+                  botConfig,
+                );
                 log.info({ event: args.event, userId: recipient.userId }, "Notification Teams card sent");
               }
             } catch (error) {
