@@ -3,10 +3,12 @@ import { z } from "zod";
 
 import * as cardRepo from "@kan/db/repository/card.repo";
 import * as checklistRepo from "@kan/db/repository/checklist.repo";
+import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import { stripHtml } from "@kan/shared/utils";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { createWithWebhook as createCardActivity } from "../utils/cardActivityHook";
+import { dispatchNotification } from "../utils/notifications";
 import { assertBoardPermission } from "../utils/permissions";
 
 const checklistSchema = z.object({
@@ -434,5 +436,115 @@ export const checklistRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+  addOrRemoveItemMember: protectedProcedure
+    .meta({
+      openapi: {
+        summary: "Assign or unassign a member from a checklist item",
+        method: "PUT",
+        path: "/checklists/items/{checklistItemPublicId}/members/{workspaceMemberPublicId}",
+        description:
+          "Toggles a workspace member's assignment on a checklist item",
+        tags: ["Cards"],
+        protect: true,
+      },
+    })
+    .input(
+      z.object({
+        checklistItemPublicId: z.string().length(12),
+        workspaceMemberPublicId: z.string().min(12),
+      }),
+    )
+    .output(z.object({ newMember: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user?.id;
+
+      if (!userId)
+        throw new TRPCError({
+          message: `User not authenticated`,
+          code: "UNAUTHORIZED",
+        });
+
+      const item = await checklistRepo.getChecklistItemByPublicIdWithChecklist(
+        ctx.db,
+        input.checklistItemPublicId,
+      );
+
+      if (!item)
+        throw new TRPCError({
+          message: `Checklist item with public ID ${input.checklistItemPublicId} not found`,
+          code: "NOT_FOUND",
+        });
+
+      await assertBoardPermission(
+        ctx.db,
+        userId,
+        item.checklist.card.list.board.publicId,
+        "card:edit",
+      );
+
+      const member = await workspaceRepo.getMemberByPublicId(
+        ctx.db,
+        input.workspaceMemberPublicId,
+      );
+
+      if (!member)
+        throw new TRPCError({
+          message: `Member with public ID ${input.workspaceMemberPublicId} not found`,
+          code: "NOT_FOUND",
+        });
+
+      const relationship = {
+        checklistItemId: item.id,
+        workspaceMemberId: member.id,
+      };
+
+      const existing = await checklistRepo.getChecklistItemMemberRelationship(
+        ctx.db,
+        relationship,
+      );
+
+      if (existing) {
+        const deleted =
+          await checklistRepo.hardDeleteChecklistItemMemberRelationship(
+            ctx.db,
+            relationship,
+          );
+
+        if (!deleted.success)
+          throw new TRPCError({
+            message: `Failed to unassign member from checklist item`,
+            code: "INTERNAL_SERVER_ERROR",
+          });
+
+        return { newMember: false };
+      }
+
+      const created =
+        await checklistRepo.createChecklistItemMemberRelationship(
+          ctx.db,
+          relationship,
+        );
+
+      if (!created.success)
+        throw new TRPCError({
+          message: `Failed to assign member to checklist item`,
+          code: "INTERNAL_SERVER_ERROR",
+        });
+
+      dispatchNotification(ctx.db, {
+        event: "card.checklist.item.assigned",
+        actorUserId: userId,
+        cardPublicId: item.checklist.card.publicId,
+        targetWorkspaceMemberId: member.id,
+        itemTitle: item.title,
+      }).catch((error) => {
+        console.error(
+          "Failed to dispatch card.checklist.item.assigned notification:",
+          error,
+        );
+      });
+
+      return { newMember: true };
     }),
 });

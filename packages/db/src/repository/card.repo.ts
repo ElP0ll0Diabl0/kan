@@ -528,6 +528,17 @@ export const getWithListAndMembersByPublicId = async (
             },
             where: isNull(checklistItems.deletedAt),
             orderBy: asc(checklistItems.index),
+            with: {
+              members: {
+                with: {
+                  member: {
+                    columns: {
+                      publicId: true,
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -690,6 +701,13 @@ export const getWithListAndMembersByPublicId = async (
     ...card,
     labels: card.labels.map((label) => label.label),
     members: card.members.map((member) => member.member),
+    checklists: card.checklists.map((checklist) => ({
+      ...checklist,
+      items: checklist.items.map((item) => ({
+        ...item,
+        members: item.members.map((m) => m.member),
+      })),
+    })),
     activities: card.activities.filter(
       (activity) => !activity.comment?.deletedAt,
     ),

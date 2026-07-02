@@ -337,6 +337,7 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
                   <Checklists
                     checklists={card.checklists}
                     cardPublicId={cardId}
+                    workspaceMembers={isTemplate ? undefined : workspaceMembers}
                     activeChecklistForm={activeChecklistForm}
                     setActiveChecklistForm={setActiveChecklistForm}
                     viewOnly={!canEdit}

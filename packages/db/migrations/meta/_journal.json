@@ -302,6 +302,13 @@
       "when": 1782727207695,
       "tag": "20260629100007_AddSsoConnection",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1782986979390,
+      "tag": "20260702100939_AssignChecklistItemMembers",
+      "breakpoints": true
     }
   ]
 }
