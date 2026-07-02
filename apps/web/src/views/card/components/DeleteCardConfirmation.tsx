@@ -1,4 +1,4 @@
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { t } from "@lingui/core/macro";
 
 import Button from "~/components/Button";
@@ -18,6 +18,7 @@ export function DeleteCardConfirmation({
   const { closeModal } = useModal();
   const utils = api.useUtils();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showPopup } = usePopup();
 
   const queryParams = {
@@ -54,7 +55,12 @@ export function DeleteCardConfirmation({
       });
     },
     onSuccess: () => {
-      router.push(`/boards/${boardPublicId}`);
+      // Preserve any active board filters (URL query) and just drop the
+      // `card` param so the popup closes without resetting filters.
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.delete("card");
+      const qs = params.toString();
+      router.push(`/boards/${boardPublicId}${qs ? `?${qs}` : ""}`);
     },
     onSettled: async () => {
       closeModal();

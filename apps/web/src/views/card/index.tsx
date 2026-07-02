@@ -2,7 +2,6 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
 import { HiXMark } from "react-icons/hi2";
 import { IoChevronForwardSharp } from "react-icons/io5";
 
@@ -19,10 +18,8 @@ import { PageHead } from "~/components/PageHead";
 import { EditYouTubeModal } from "~/components/YouTubeEmbed/EditYouTubeModal";
 import { usePermissions } from "~/hooks/usePermissions";
 import { useModal } from "~/providers/modal";
-import { usePopup } from "~/providers/popup";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
-import { invalidateCard } from "~/utils/cardInvalidation";
 import { formatMemberDisplayName, getAvatarUrl } from "~/utils/helpers";
 import { DeleteLabelConfirmation } from "../../components/DeleteLabelConfirmation";
 import ActivityList from "./components/ActivityList";
@@ -40,12 +37,7 @@ import ListSelector from "./components/ListSelector";
 import MemberSelector from "./components/MemberSelector";
 import { NewChecklistForm } from "./components/NewChecklistForm";
 import NewCommentForm from "./components/NewCommentForm";
-
-interface FormValues {
-  cardId: string;
-  title: string;
-  description: string;
-}
+import { useCardEditor } from "./useCardEditor";
 
 export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const router = useRouter();
@@ -165,22 +157,8 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
 
 export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
   const router = useRouter();
-  const utils = api.useUtils();
-  const {
-    modalContentType,
-    entityId,
-    getModalState,
-    clearModalState,
-    isOpen,
-    modalStates,
-  } = useModal();
-  const { showPopup } = usePopup();
+  const { modalContentType, entityId, isOpen } = useModal();
   const { workspace } = useWorkspace();
-  const { canEditCard } = usePermissions();
-  const { data: session } = authClient.useSession();
-  const [activeChecklistForm, setActiveChecklistForm] = useState<string | null>(
-    null,
-  );
   const [activeTab, setActiveTab] = useState<"comments" | "activity">(
     "comments",
   );
@@ -189,10 +167,23 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
     ? router.query.cardId[0]
     : router.query.cardId;
 
-  const { data: card, isLoading, error } = api.card.byId.useQuery(
-    { cardPublicId: cardId ?? "" },
-    { enabled: !!cardId && cardId.length >= 12 },
-  );
+  const {
+    card,
+    isLoading,
+    error,
+    canEdit,
+    boardId,
+    board,
+    workspaceMembers,
+    editorWorkspaceMembers,
+    refetchCard,
+    onSubmit,
+    activeChecklistForm,
+    setActiveChecklistForm,
+    register,
+    handleSubmit,
+    setValue,
+  } = useCardEditor(cardId);
 
   // Redirect to 404 if card doesn't exist
   useEffect(() => {
@@ -202,105 +193,6 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
       }
     }
   }, [router, cardId, isLoading, error, card]);
-
-  const isCreator = card?.createdBy && session?.user.id === card.createdBy;
-  const canEdit = canEditCard || isCreator;
-
-  const refetchCard = async () => {
-    if (cardId) await utils.card.byId.refetch({ cardPublicId: cardId });
-  };
-
-  const board = card?.list.board;
-  const workspaceMembers = board?.workspace.members;
-  const boardId = board?.publicId;
-
-  const editorWorkspaceMembers =
-    workspaceMembers
-      ?.filter((member) => member.email)
-      .map((member) => ({
-        publicId: member.publicId,
-        email: member.email,
-        user: member.user
-          ? {
-              id: member.user.id,
-              name: member.user.name ?? null,
-              image: member.user.image ?? null,
-            }
-          : null,
-      })) ?? [];
-
-  const updateCard = api.card.update.useMutation({
-    onError: () => {
-      showPopup({
-        header: t`Unable to update card`,
-        message: t`Please try again later, or contact customer support.`,
-        icon: "error",
-      });
-    },
-    onSettled: async () => {
-      if (cardId) await invalidateCard(utils, cardId);
-    },
-  });
-
-  const addOrRemoveLabel = api.card.addOrRemoveLabel.useMutation({
-    onError: () => {
-      showPopup({
-        header: t`Unable to add label`,
-        message: t`Please try again later, or contact customer support.`,
-        icon: "error",
-      });
-    },
-    onSettled: async () => {
-      if (cardId) {
-        await utils.card.byId.invalidate({ cardPublicId: cardId });
-      }
-    },
-  });
-
-  const { register, handleSubmit, setValue, watch } = useForm<FormValues>({
-    values: {
-      cardId: cardId ?? "",
-      title: card?.title ?? "",
-      description: card?.description ?? "",
-    },
-  });
-
-  const onSubmit = (values: FormValues) => {
-    updateCard.mutate({
-      cardPublicId: values.cardId,
-      title: values.title,
-      description: values.description,
-    });
-  };
-
-  // this adds the new created label to selected labels
-  useEffect(() => {
-    const newLabelId = modalStates.NEW_LABEL_CREATED;
-    if (newLabelId && cardId) {
-      const isAlreadyAdded = card?.labels.some(
-        (label) => label.publicId === newLabelId,
-      );
-
-      if (!isAlreadyAdded) {
-        addOrRemoveLabel.mutate({
-          cardPublicId: cardId,
-          labelPublicId: newLabelId,
-        });
-      }
-      clearModalState("NEW_LABEL_CREATED");
-    }
-  }, [modalStates.NEW_LABEL_CREATED, card, cardId]);
-
-  // Open the new item form after creating a new checklist
-  useEffect(() => {
-    if (!card) return;
-    const state = getModalState("ADD_CHECKLIST");
-    const createdId: string | undefined = state?.createdChecklistId;
-    if (createdId) {
-      setActiveChecklistForm(createdId);
-      clearModalState("ADD_CHECKLIST");
-    }
-  }, [card, getModalState, clearModalState]);
 
   // Auto-resize title textarea
   useEffect(() => {

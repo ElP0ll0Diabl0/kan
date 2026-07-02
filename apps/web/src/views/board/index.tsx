@@ -36,6 +36,7 @@ import { usePopup } from "~/providers/popup";
 import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 import { formatToArray } from "~/utils/helpers";
+import CardModal from "~/views/card/CardModal";
 import { DeleteCardConfirmation } from "~/views/card/components/DeleteCardConfirmation";
 import { BoardAccessForm } from "./components/BoardAccessForm";
 import BoardDropdown from "./components/BoardDropdown";
@@ -99,6 +100,30 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       ? params.boardId[0]
       : params.boardId
     : null;
+
+  // The card popup is driven by a `?card=<publicId>` query param and opened via
+  // shallow routing so the board stays mounted and active filters (also held in
+  // the URL query) are preserved.
+  const cardModalId = Array.isArray(router.query.card)
+    ? router.query.card[0]
+    : router.query.card;
+
+  const openCardModal = (cardPublicId: string) => {
+    void router.push(
+      { pathname: router.pathname, query: { ...router.query, card: cardPublicId } },
+      undefined,
+      { shallow: true },
+    );
+  };
+
+  const closeCardModal = () => {
+    const { card: _card, ...rest } = router.query;
+    void router.push(
+      { pathname: router.pathname, query: rest },
+      undefined,
+      { shallow: true },
+    );
+  };
 
   const updateBoard = api.board.update.useMutation();
 
@@ -416,21 +441,23 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "NEW_WORKSPACE"}
+          isVisible={
+            isOpen && !cardModalId && modalContentType === "NEW_WORKSPACE"
+          }
         >
           <NewWorkspaceForm />
         </Modal>
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "NEW_LABEL"}
+          isVisible={isOpen && !cardModalId && modalContentType === "NEW_LABEL"}
         >
           <LabelForm boardPublicId={boardId ?? ""} refetch={refetchBoard} />
         </Modal>
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "EDIT_LABEL"}
+          isVisible={isOpen && !cardModalId && modalContentType === "EDIT_LABEL"}
         >
           <LabelForm
             boardPublicId={boardId ?? ""}
@@ -441,7 +468,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "DELETE_LABEL"}
+          isVisible={
+            isOpen && !cardModalId && modalContentType === "DELETE_LABEL"
+          }
         >
           <DeleteLabelConfirmation
             refetch={refetchBoard}
@@ -484,7 +513,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "EDIT_YOUTUBE"}
+          isVisible={
+            isOpen && !cardModalId && modalContentType === "EDIT_YOUTUBE"
+          }
         >
           <EditYouTubeModal />
         </Modal>
@@ -524,7 +555,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         </Modal>
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "DELETE_CARD"}
+          isVisible={
+            isOpen && !cardModalId && modalContentType === "DELETE_CARD"
+          }
         >
           <DeleteCardConfirmation
             cardPublicId={entityId}
@@ -730,8 +763,21 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                               card.publicId.startsWith(
                                                 "PLACEHOLDER",
                                               )
-                                            )
+                                            ) {
                                               e.preventDefault();
+                                              return;
+                                            }
+                                            // Let modifier-clicks open the
+                                            // full page in a new tab.
+                                            if (
+                                              e.metaKey ||
+                                              e.ctrlKey ||
+                                              e.shiftKey ||
+                                              e.altKey
+                                            )
+                                              return;
+                                            e.preventDefault();
+                                            openCardModal(card.publicId);
                                           }}
                                           onContextMenu={(e) => {
                                             if (
@@ -813,6 +859,13 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
           />
         )}
         {renderModalContent()}
+        {cardModalId && (
+          <CardModal
+            cardPublicId={cardModalId}
+            isTemplate={isTemplate}
+            onClose={closeCardModal}
+          />
+        )}
       </div>
     </>
   );
