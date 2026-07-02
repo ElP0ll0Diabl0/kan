@@ -284,6 +284,9 @@ export default function CardModal({
                           <Checklists
                             checklists={card.checklists}
                             cardPublicId={cardPublicId}
+                            workspaceMembers={
+                              isTemplate ? undefined : workspaceMembers
+                            }
                             activeChecklistForm={activeChecklistForm}
                             setActiveChecklistForm={setActiveChecklistForm}
                             viewOnly={!canEdit}

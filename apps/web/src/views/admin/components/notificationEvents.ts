@@ -9,6 +9,7 @@ export type NotificationEventType =
   | "card.comment.added"
   | "card.member.added"
   | "card.member.removed"
+  | "card.checklist.item.assigned"
   | "mention"
   | "workspace.member.added"
   | "workspace.member.removed"
@@ -39,6 +40,12 @@ export const NOTIFICATION_EVENTS: NotificationEventMeta[] = [
     group: "card",
     label: msg`Removed from a card`,
     description: msg`Emails a member when they're removed from a card.`,
+  },
+  {
+    eventType: "card.checklist.item.assigned",
+    group: "card",
+    label: msg`Assigned a task`,
+    description: msg`Emails a member when they're assigned a checklist task.`,
   },
   {
     eventType: "card.comment.added",

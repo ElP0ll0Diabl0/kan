@@ -17,6 +17,7 @@ import JoinWorkspaceTemplate from "./templates/join-workspace";
 import MagicLinkTemplate from "./templates/magic-link";
 import MentionTemplate from "./templates/mention";
 import ResetPasswordTemplate from "./templates/reset-password";
+import TaskAssignedTemplate from "./templates/task-assigned";
 import WorkspaceMemberRemovedTemplate from "./templates/workspace-member-removed";
 import WorkspaceRoleChangedTemplate from "./templates/workspace-role-changed";
 
@@ -31,6 +32,7 @@ export type Templates =
   | "CARD_COMMENT"
   | "CARD_ASSIGNED"
   | "CARD_UNASSIGNED"
+  | "TASK_ASSIGNED"
   | "CARD_DELETED"
   | "BOARD_ACCESS"
   | "WORKSPACE_MEMBER_REMOVED"
@@ -48,6 +50,7 @@ const emailTemplates: Record<Templates, React.ComponentType<any>> = {
   CARD_COMMENT: CardCommentTemplate,
   CARD_ASSIGNED: CardAssignedTemplate,
   CARD_UNASSIGNED: CardUnassignedTemplate,
+  TASK_ASSIGNED: TaskAssignedTemplate,
   CARD_DELETED: CardDeletedTemplate,
   BOARD_ACCESS: BoardAccessTemplate,
   WORKSPACE_MEMBER_REMOVED: WorkspaceMemberRemovedTemplate,

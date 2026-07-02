@@ -81,6 +81,13 @@ const PER_EVENT_PLACEHOLDERS: Record<
     { key: "boardName", label: "Board name" },
     { key: "cardUrl", label: "Card URL" },
   ],
+  "card.checklist.item.assigned": [
+    { key: "actorName", label: "Actor name" },
+    { key: "taskTitle", label: "Task title" },
+    { key: "cardTitle", label: "Card title" },
+    { key: "boardName", label: "Board name" },
+    { key: "cardUrl", label: "Card URL" },
+  ],
   mention: [
     { key: "commenterName", label: "Commenter name" },
     { key: "boardName", label: "Board name" },

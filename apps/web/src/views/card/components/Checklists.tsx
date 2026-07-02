@@ -8,6 +8,7 @@ import { StrictModeDroppable as Droppable } from "~/components/StrictModeDroppab
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
 import { api } from "~/utils/api";
+import type { ChecklistWorkspaceMember } from "./ChecklistItemRow";
 import ChecklistItemRow from "./ChecklistItemRow";
 import ChecklistNameInput from "./ChecklistNameInput";
 import NewChecklistItemForm from "./NewChecklistItemForm";
@@ -16,6 +17,7 @@ interface ChecklistItem {
   publicId: string;
   title: string;
   completed: boolean;
+  members: { publicId: string }[];
 }
 
 interface Checklist {
@@ -27,6 +29,7 @@ interface Checklist {
 interface ChecklistsProps {
   checklists: Checklist[];
   cardPublicId: string;
+  workspaceMembers?: ChecklistWorkspaceMember[];
   activeChecklistForm?: string | null;
   setActiveChecklistForm?: (id: string | null) => void;
   viewOnly?: boolean;
@@ -35,6 +38,7 @@ interface ChecklistsProps {
 export default function Checklists({
   checklists,
   cardPublicId,
+  workspaceMembers,
   activeChecklistForm,
   setActiveChecklistForm,
   viewOnly = false,
@@ -208,8 +212,10 @@ export default function Checklists({
                                   publicId: item.publicId,
                                   title: item.title,
                                   completed: item.completed,
+                                  members: item.members,
                                 }}
                                 cardPublicId={cardPublicId}
+                                workspaceMembers={workspaceMembers}
                                 onCreateNewItem={() =>
                                   setActiveChecklistForm?.(checklist.publicId)
                                 }

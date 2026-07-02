@@ -28,6 +28,7 @@ export const notificationTypes = [
   "card.comment.added",
   "card.member.added",
   "card.member.removed",
+  "card.checklist.item.assigned",
   "board.access.granted",
 ] as const;
 

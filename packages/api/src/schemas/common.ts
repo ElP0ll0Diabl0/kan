@@ -7,12 +7,15 @@ export const labelSchema = z.object({
   colourCode: z.string().nullable(),
 });
 
-// Shared checklist item schema
+// Shared checklist item schema. `members` (assignees) are only populated by
+// the card-detail query; board queries omit the relation, so it defaults to []
+// to keep the shared shape consistent for consumers.
 export const checklistItemResponseSchema = z.object({
   publicId: z.string(),
   title: z.string(),
   completed: z.boolean(),
   index: z.number(),
+  members: z.array(z.object({ publicId: z.string() })).default([]),
 });
 
 // Shared checklist schema with items

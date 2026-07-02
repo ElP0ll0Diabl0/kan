@@ -5,6 +5,7 @@ import {
   boolean,
   integer,
   pgTable,
+  primaryKey,
   timestamp,
   uuid,
   varchar,
@@ -12,6 +13,7 @@ import {
 
 import { cards } from "./cards";
 import { users } from "./users";
+import { workspaceMembers } from "./workspaces";
 
 export const checklists = pgTable("card_checklist", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
@@ -71,20 +73,53 @@ export const checklistItems = pgTable("card_checklist_item", {
   }),
 }).enableRLS();
 
-export const checklistItemsRelations = relations(checklistItems, ({ one }) => ({
-  checklist: one(checklists, {
-    fields: [checklistItems.checklistId],
-    references: [checklists.id],
-    relationName: "checklistItemsChecklist",
+export const checklistItemsRelations = relations(
+  checklistItems,
+  ({ one, many }) => ({
+    checklist: one(checklists, {
+      fields: [checklistItems.checklistId],
+      references: [checklists.id],
+      relationName: "checklistItemsChecklist",
+    }),
+    createdBy: one(users, {
+      fields: [checklistItems.createdBy],
+      references: [users.id],
+      relationName: "checklistItemsCreatedByUser",
+    }),
+    deletedBy: one(users, {
+      fields: [checklistItems.deletedBy],
+      references: [users.id],
+      relationName: "checklistItemsDeletedByUser",
+    }),
+    members: many(checklistItemToWorkspaceMembers),
   }),
-  createdBy: one(users, {
-    fields: [checklistItems.createdBy],
-    references: [users.id],
-    relationName: "checklistItemsCreatedByUser",
+);
+
+export const checklistItemToWorkspaceMembers = pgTable(
+  "_checklist_item_workspace_members",
+  {
+    checklistItemId: bigint("checklistItemId", { mode: "number" })
+      .notNull()
+      .references(() => checklistItems.id, { onDelete: "cascade" }),
+    workspaceMemberId: bigint("workspaceMemberId", { mode: "number" })
+      .notNull()
+      .references(() => workspaceMembers.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.checklistItemId, t.workspaceMemberId] })],
+).enableRLS();
+
+export const checklistItemToWorkspaceMembersRelations = relations(
+  checklistItemToWorkspaceMembers,
+  ({ one }) => ({
+    item: one(checklistItems, {
+      fields: [checklistItemToWorkspaceMembers.checklistItemId],
+      references: [checklistItems.id],
+      relationName: "checklistItemToWorkspaceMembersItem",
+    }),
+    member: one(workspaceMembers, {
+      fields: [checklistItemToWorkspaceMembers.workspaceMemberId],
+      references: [workspaceMembers.id],
+      relationName: "checklistItemToWorkspaceMembersMember",
+    }),
   }),
-  deletedBy: one(users, {
-    fields: [checklistItems.deletedBy],
-    references: [users.id],
-    relationName: "checklistItemsDeletedByUser",
-  }),
-}));
+);

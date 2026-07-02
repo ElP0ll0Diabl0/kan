@@ -1,7 +1,11 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { dbClient } from "@kan/db/client";
-import { checklistItems, checklists } from "@kan/db/schema";
+import {
+  checklistItems,
+  checklistItemToWorkspaceMembers,
+  checklists,
+} from "@kan/db/schema";
 import { generateUID } from "@kan/shared/utils";
 
 export const getCount = async (db: dbClient) => {
@@ -153,6 +157,55 @@ export const getChecklistItemByPublicIdWithChecklist = async (
   });
 
   return item;
+};
+
+export const getChecklistItemMemberRelationship = async (
+  db: dbClient,
+  args: { checklistItemId: number; workspaceMemberId: number },
+) => {
+  return db.query.checklistItemToWorkspaceMembers.findFirst({
+    where: and(
+      eq(checklistItemToWorkspaceMembers.checklistItemId, args.checklistItemId),
+      eq(
+        checklistItemToWorkspaceMembers.workspaceMemberId,
+        args.workspaceMemberId,
+      ),
+    ),
+  });
+};
+
+export const createChecklistItemMemberRelationship = async (
+  db: dbClient,
+  args: { checklistItemId: number; workspaceMemberId: number },
+) => {
+  await db.insert(checklistItemToWorkspaceMembers).values({
+    checklistItemId: args.checklistItemId,
+    workspaceMemberId: args.workspaceMemberId,
+  });
+
+  return { success: true };
+};
+
+export const hardDeleteChecklistItemMemberRelationship = async (
+  db: dbClient,
+  args: { checklistItemId: number; workspaceMemberId: number },
+) => {
+  await db
+    .delete(checklistItemToWorkspaceMembers)
+    .where(
+      and(
+        eq(
+          checklistItemToWorkspaceMembers.checklistItemId,
+          args.checklistItemId,
+        ),
+        eq(
+          checklistItemToWorkspaceMembers.workspaceMemberId,
+          args.workspaceMemberId,
+        ),
+      ),
+    );
+
+  return { success: true };
 };
 
 export const updateItemById = async (

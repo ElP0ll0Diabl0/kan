@@ -27,6 +27,7 @@ export const notificationEventTypes = [
   "card.comment.added",
   "card.member.added",
   "card.member.removed",
+  "card.checklist.item.assigned",
   "mention",
   "workspace.member.added",
   "workspace.member.removed",

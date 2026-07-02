@@ -37,6 +37,9 @@ export const EVENT_DEFAULT_ENABLED: Record<NotificationEventType, boolean> = {
   "card.comment.added": false,
   "card.member.added": false,
   "card.member.removed": false,
+  // Explicit, low-volume, and directly requested — on by default so it works
+  // out of the box. Admins can disable it per workspace.
+  "card.checklist.item.assigned": true,
   "workspace.member.removed": false,
   "workspace.role.changed": false,
 };
@@ -57,6 +60,7 @@ export const EVENT_DEFAULT_TEAMS_ENABLED: Record<NotificationEventType, boolean>
     "card.comment.added": false,
     "card.member.added": false,
     "card.member.removed": false,
+    "card.checklist.item.assigned": false,
     "workspace.member.removed": false,
     "workspace.role.changed": false,
   };
@@ -70,6 +74,7 @@ const TEMPLATE_FOR: Record<NotificationEventType, Templates> = {
   "card.comment.added": "CARD_COMMENT",
   "card.member.added": "CARD_ASSIGNED",
   "card.member.removed": "CARD_UNASSIGNED",
+  "card.checklist.item.assigned": "TASK_ASSIGNED",
   "workspace.member.added": "ADDED_TO_WORKSPACE",
   "workspace.member.removed": "WORKSPACE_MEMBER_REMOVED",
   "workspace.role.changed": "WORKSPACE_ROLE_CHANGED",
@@ -109,6 +114,13 @@ export type DispatchArgs =
       actorUserId: string;
       cardPublicId: string;
       targetWorkspaceMemberId: number;
+    }
+  | {
+      event: "card.checklist.item.assigned";
+      actorUserId: string;
+      cardPublicId: string;
+      targetWorkspaceMemberId: number;
+      itemTitle: string;
     }
   | {
       event: "card.deleted";
@@ -429,6 +441,34 @@ async function resolveContext(
           cardUrl: ctx.cardUrl,
         },
         ledgerType: args.event,
+        cardId: ctx.cardId,
+        dedupe: false,
+      };
+    }
+
+    case "card.checklist.item.assigned": {
+      const ctx = await buildCardContext(db, args.cardPublicId);
+      if (!ctx) return null;
+      const actorName = await getActorName(db, args.actorUserId);
+
+      const member = await memberRepo.getById(db, args.targetWorkspaceMemberId);
+      if (!member?.userId) return null;
+      const recipient = await resolveUserRecipient(db, member.userId);
+      if (!recipient) return null;
+
+      return {
+        workspaceId: ctx.workspaceId,
+        recipients: [recipient],
+        template: TEMPLATE_FOR["card.checklist.item.assigned"],
+        defaultSubject: `You were assigned a task on ${ctx.cardTitle}`,
+        data: {
+          actorName,
+          cardTitle: ctx.cardTitle,
+          boardName: ctx.boardName,
+          cardUrl: ctx.cardUrl,
+          taskTitle: args.itemTitle,
+        },
+        ledgerType: "card.checklist.item.assigned",
         cardId: ctx.cardId,
         dedupe: false,
       };

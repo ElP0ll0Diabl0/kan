@@ -5,18 +5,34 @@ import { HiXMark } from "react-icons/hi2";
 import { RiDraggable } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
+import Avatar from "~/components/Avatar";
 import PlainTextEditor from "~/components/PlainTextEditor";
 import { usePopup } from "~/providers/popup";
 import { api } from "~/utils/api";
 import { invalidateCard } from "~/utils/cardInvalidation";
+import { formatMemberDisplayName, getAvatarUrl } from "~/utils/helpers";
+import ChecklistItemMemberSelector from "./ChecklistItemMemberSelector";
+
+export interface ChecklistWorkspaceMember {
+  publicId: string;
+  email: string;
+  user: {
+    id: string | null;
+    name: string | null;
+    email: string;
+    image: string | null;
+  } | null;
+}
 
 interface ChecklistItemRowProps {
   item: {
     publicId: string;
     title: string;
     completed: boolean;
+    members: { publicId: string }[];
   };
   cardPublicId: string;
+  workspaceMembers?: ChecklistWorkspaceMember[];
   onCreateNewItem?: () => void;
   viewOnly?: boolean;
   dragHandleProps?: DraggableProvided["dragHandleProps"];
@@ -26,6 +42,7 @@ interface ChecklistItemRowProps {
 export default function ChecklistItemRow({
   item,
   cardPublicId,
+  workspaceMembers,
   onCreateNewItem,
   viewOnly = false,
   dragHandleProps,
@@ -34,6 +51,28 @@ export default function ChecklistItemRow({
   const utils = api.useUtils();
   const { showPopup } = usePopup();
   const [completed, setCompleted] = useState(item.completed);
+
+  const showMemberSelector = !viewOnly && !!workspaceMembers?.length;
+
+  const formattedMembers = (workspaceMembers ?? []).map((member) => ({
+    key: member.publicId,
+    value: formatMemberDisplayName(
+      member.user?.name ?? null,
+      member.user?.email ?? member.email,
+    ),
+    imageUrl: member.user?.image ? getAvatarUrl(member.user.image) : undefined,
+    selected: item.members.some((m) => m.publicId === member.publicId),
+    leftIcon: (
+      <Avatar
+        size="xs"
+        name={member.user?.name ?? ""}
+        imageUrl={
+          member.user?.image ? getAvatarUrl(member.user.image) : undefined
+        }
+        email={member.user?.email ?? member.email}
+      />
+    ),
+  }));
 
   const updateItem = api.checklist.updateItem.useMutation({
     onMutate: async (vars) => {
@@ -161,7 +200,7 @@ export default function ChecklistItemRow({
         />
       </label>
 
-      <div className="flex-1 pr-7">
+      <div className="min-w-0 flex-1 pr-2">
         <PlainTextEditor
           key={item.publicId}
           content={item.title}
@@ -180,15 +219,25 @@ export default function ChecklistItemRow({
         />
       </div>
 
-      {!viewOnly && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="absolute right-1 top-1/2 hidden -translate-y-1/2 rounded-md p-1 text-light-900 group-hover:block hover:bg-light-200 dark:text-dark-700 dark:hover:bg-dark-200"
-        >
-          <HiXMark size={16} />
-        </button>
-      )}
+      <div className="flex flex-shrink-0 items-center gap-1 pt-[1px] pr-1">
+        {showMemberSelector && (
+          <ChecklistItemMemberSelector
+            cardPublicId={cardPublicId}
+            checklistItemPublicId={item.publicId}
+            members={formattedMembers}
+            disabled={viewOnly}
+          />
+        )}
+        {!viewOnly && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="rounded-md p-1 text-light-900 opacity-0 transition-opacity hover:bg-light-200 group-hover:opacity-100 dark:text-dark-700 dark:hover:bg-dark-200"
+          >
+            <HiXMark size={16} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
