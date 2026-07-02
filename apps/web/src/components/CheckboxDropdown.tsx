@@ -1,7 +1,6 @@
-import { Menu, Transition } from "@headlessui/react";
-import { Fragment, useState } from "react";
+import { Menu } from "@headlessui/react";
+import { useEffect, useRef, useState } from "react";
 import { HiEllipsisHorizontal, HiMiniPlus } from "react-icons/hi2";
-import { twMerge } from "tailwind-merge";
 
 interface Item {
   key: string;
@@ -15,6 +14,26 @@ interface Group {
   label: string;
   icon: React.ReactNode;
   items: Item[];
+}
+
+/**
+ * Resets the group-drilldown state after the menu closes. This used to live in
+ * the `<Transition afterLeave>` callback; the transition wrapper was removed
+ * because the menu is now portaled/anchored (see the note on `Menu.Items`).
+ */
+function SelectedGroupResetter({
+  open,
+  reset,
+}: {
+  open: boolean;
+  reset: (value: string | null) => void;
+}) {
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (wasOpen.current && !open) reset(null);
+    wasOpen.current = open;
+  }, [open, reset]);
+  return null;
 }
 
 interface CheckboxDropdownProps {
@@ -49,11 +68,7 @@ export default function CheckboxDropdown({
 }: CheckboxDropdownProps) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
-  const menuSpacingClass = {
-    sm: "top-[26px]",
-    md: "top-[32px]",
-    lg: "top-[38px]",
-  };
+  const anchorGap = menuSpacing === "lg" ? 10 : menuSpacing === "md" ? 8 : 6;
 
   const renderMenuItems = (items: Item[], groupKey: string | null) => (
     <>
@@ -131,31 +146,34 @@ export default function CheckboxDropdown({
       as="div"
       className="relative flex w-full flex-wrap items-center text-left"
     >
-      <>
-        <Menu.Button
-          as={asChild ? "div" : undefined}
-          disabled={disabled}
-          className="h-full w-full cursor-pointer focus-visible:outline-none disabled:cursor-not-allowed"
-        >
-          {children}
-        </Menu.Button>
+      {({ open }) => (
+        <>
+          <SelectedGroupResetter open={open} reset={setSelectedGroup} />
+          <Menu.Button
+            as={asChild ? "div" : undefined}
+            disabled={disabled}
+            className="h-full w-full cursor-pointer focus-visible:outline-none disabled:cursor-not-allowed"
+          >
+            {children}
+          </Menu.Button>
 
-        <Transition
-          as={Fragment}
-          enter="transition ease-out duration-100"
-          enterFrom="transform opacity-0 scale-95"
-          enterTo="transform opacity-100 scale-100"
-          leave="transition ease-in duration-75"
-          leaveFrom="transform opacity-100 scale-100"
-          leaveTo="transform opacity-0 scale-95"
-          afterLeave={() => setSelectedGroup(null)}
-        >
+          {/*
+            Anchored + portaled so the menu is not a layout child of the
+            surrounding scroll container. Previously it was rendered `absolute`
+            inline, so opening/closing it near the scroll bottom changed the
+            container's scrollHeight, clamped scrollTop, and fed back into
+            Headless UI's open handling — an infinite render loop (React #185).
+            Anchoring also flips the menu upward near the viewport edge instead
+            of overflowing/clipping.
+          */}
           <Menu.Items
-            className={twMerge(
-              "mt-2s absolute z-50 w-56 origin-top-left rounded-md border-[1px] border-light-200 bg-light-50 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:border-dark-500 dark:bg-dark-200",
-              position === "left" ? "left-0" : "right-0",
-              menuSpacingClass[menuSpacing],
-            )}
+            anchor={{
+              to: position === "left" ? "bottom start" : "bottom end",
+              gap: anchorGap,
+            }}
+            portal
+            transition
+            className="z-50 w-56 origin-top rounded-md border-[1px] border-light-200 bg-light-50 shadow-lg ring-1 ring-black ring-opacity-5 transition duration-100 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0 dark:border-dark-500 dark:bg-dark-200"
           >
             <div className="max-h-[350px] overflow-y-auto p-1">
               {!selectedGroup ? (
@@ -183,15 +201,15 @@ export default function CheckboxDropdown({
                 <>
                   {groups?.find((g) => g.key === selectedGroup)?.items &&
                     renderMenuItems(
-                      groups.find((g) => g.key === selectedGroup)?.items || [],
+                      groups.find((g) => g.key === selectedGroup)?.items ?? [],
                       selectedGroup,
                     )}
                 </>
               )}
             </div>
           </Menu.Items>
-        </Transition>
-      </>
+        </>
+      )}
     </Menu>
   );
 }
