@@ -59,10 +59,15 @@ const NewChecklistItemForm = ({
 
       utils.card.byId.setData({ cardPublicId }, (old) => {
         if (!old) return old as any;
+        const targetChecklist = old.checklists.find(
+          (cl) => cl.publicId === checklistPublicId,
+        );
         const placeholder = {
           publicId: `PLACEHOLDER_${generateUID()}`,
           title: vars.title,
           completed: false,
+          index: targetChecklist?.items.length ?? 0,
+          members: [],
         };
         const updatedChecklists = old.checklists.map((cl) =>
           cl.publicId === checklistPublicId

@@ -61,7 +61,7 @@ export default function ChecklistItemRow({
       member.user?.email ?? member.email,
     ),
     imageUrl: member.user?.image ? getAvatarUrl(member.user.image) : undefined,
-    selected: item.members.some((m) => m.publicId === member.publicId),
+    selected: (item.members ?? []).some((m) => m.publicId === member.publicId),
     leftIcon: (
       <Avatar
         size="xs"

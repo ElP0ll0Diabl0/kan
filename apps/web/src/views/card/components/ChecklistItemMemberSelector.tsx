@@ -43,17 +43,18 @@ export default function ChecklistItemMemberSelector({
           items: cl.items.map((ci) => {
             if (ci.publicId !== checklistItemPublicId) return ci;
 
-            const hasMember = ci.members.some(
+            const members = ci.members ?? [];
+            const hasMember = members.some(
               (m) => m.publicId === update.workspaceMemberPublicId,
             );
 
             return {
               ...ci,
               members: hasMember
-                ? ci.members.filter(
+                ? members.filter(
                     (m) => m.publicId !== update.workspaceMemberPublicId,
                   )
-                : [...ci.members, { publicId: update.workspaceMemberPublicId }],
+                : [...members, { publicId: update.workspaceMemberPublicId }],
             };
           }),
         }));
